@@ -143,3 +143,7 @@ echo ""
 echo "  To view them:"
 echo -e "  ${CYAN}aws ssm get-parameters-by-path --path /n8n/${ENV} --with-decryption --query 'Parameters[*].{Name:Name,Value:Value}'${NC}"
 echo ""
+
+# Export for bootstrap.sh tfvars generation
+export DOMAIN_NAME="${N8N_HOST#*.}"
+export SUBDOMAIN="${N8N_HOST%%.*}"

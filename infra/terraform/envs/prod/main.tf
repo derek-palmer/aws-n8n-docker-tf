@@ -17,7 +17,13 @@ terraform {
   # Run `terraform init -backend-config="bucket=n8n-tf-state-YOUR_ACCOUNT_ID"`
   # to initialize.
   #
-  # backend "s3" {
+  backend "s3" {
+    bucket         = "n8n-tf-state-851725265301"
+    key            = "envs/prod/terraform.tfstate"
+    region         = "us-east-1"
+    dynamodb_table = "n8n-tf-locks"
+    encrypt        = true
+  }
   #   key            = "envs/prod/terraform.tfstate"
   #   region         = "us-east-1"
   #   dynamodb_table = "n8n-tf-locks"

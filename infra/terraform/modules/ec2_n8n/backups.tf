@@ -34,7 +34,7 @@ resource "aws_dlm_lifecycle_policy" "n8n_backup" {
     resource_types = ["INSTANCE"]
 
     schedule {
-      name = "Daily Snapshots (14 days retention)"
+      name = "Daily Snapshots 14 days retention"
 
       create_rule {
         interval      = 24

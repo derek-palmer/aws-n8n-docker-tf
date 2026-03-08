@@ -42,7 +42,6 @@ echo ""
 info "Checking prerequisites..."
 
 command -v aws   &>/dev/null || error "aws CLI not found. Install: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html"
-command -v docker &>/dev/null || error "docker not found. Install: https://docs.docker.com/engine/install/"
 
 resolve_aws_profile
 AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
@@ -96,10 +95,19 @@ fi
 MAIN_TF="infra/terraform/envs/${ENV}/main.tf"
 if grep -q "# backend" "${MAIN_TF}"; then
   info "Enabling S3 backend in ${MAIN_TF}..."
-  # Use perl for portable in-place multi-line sed replacement
-  perl -i -0pe \
-    "s|# backend \"s3\" \{[^}]*\}|backend \"s3\" {\n    bucket         = \"${STATE_BUCKET}\"\n    key            = \"envs/${ENV}/terraform.tfstate\"\n    region         = \"${AWS_REGION}\"\n    dynamodb_table = \"${LOCK_TABLE}\"\n    encrypt        = true\n  }|" \
-    "${MAIN_TF}"
+  # Use a combination of sed to uncomment the backend block and inject the variables inline
+  # We look for the marker comment "# backend \"s3\" {" and uncomment/replace the block
+  sed -i -e "/# backend \"s3\" {/!b" \
+      -e "c\\
+  backend \"s3\" {\\
+    bucket         = \"${STATE_BUCKET}\"\\
+    key            = \"envs/${ENV}/terraform.tfstate\"\\
+    region         = \"${AWS_REGION}\"\\
+    dynamodb_table = \"${LOCK_TABLE}\"\\
+    encrypt        = true\\
+  }" \
+      -e ":a" -e "n" -e "/# }/!ba" -e "d" \
+      "${MAIN_TF}"
   success "Backend configured in ${MAIN_TF}"
 else
   warn "Backend block already uncommented in ${MAIN_TF}, skipping."
