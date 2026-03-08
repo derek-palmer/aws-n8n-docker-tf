@@ -23,6 +23,11 @@ phases:
       
       - echo "Capturing upstream digest for reproducible tagging..."
       - UPSTREAM_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' n8nio/n8n:latest)
+      - |
+          if [ -z "$UPSTREAM_DIGEST" ]; then
+            echo "ERROR: Failed to retrieve upstream digest"
+            exit 1
+          fi
       - echo "Pinned upstream digest = $UPSTREAM_DIGEST"
 
       - echo "Tagging image..."
