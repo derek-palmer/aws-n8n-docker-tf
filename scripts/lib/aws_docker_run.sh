@@ -63,6 +63,9 @@ if ! creds=$(aws configure export-credentials --profile "${AWS_PROFILE}" --forma
   error "Could not resolve credentials for profile '${AWS_PROFILE}'.\nRun 'awslogin' in your terminal first, then retry:\n  aws sso login --profile ${AWS_PROFILE}"
 fi
 
+# Detect Profile Region specifically
+PROFILE_REGION=$(aws configure get region --profile "${AWS_PROFILE}" 2>/dev/null || echo "us-east-1")
+
 # shellcheck disable=SC2163
 eval "${creds}"
 
@@ -74,7 +77,7 @@ exec docker run --rm -it \
   -e AWS_ACCESS_KEY_ID \
   -e AWS_SECRET_ACCESS_KEY \
   -e AWS_SESSION_TOKEN \
-  -e AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-us-east-1}" \
-  -e AWS_REGION="${AWS_REGION:-us-east-1}" \
+  -e AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-${PROFILE_REGION}}" \
+  -e AWS_REGION="${AWS_REGION:-${PROFILE_REGION}}" \
   amazon/aws-cli:latest \
   "$@"

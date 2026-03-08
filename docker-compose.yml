@@ -13,6 +13,7 @@ services:
       - N8N_PORT=${N8N_PORT:-5678}
       - N8N_PROTOCOL=${N8N_PROTOCOL:-http}
       - WEBHOOK_URL=${N8N_PROTOCOL:-http}://${N8N_HOST:-localhost}:${N8N_PORT:-5678}
+      - QUEUE_HEALTH_CHECK_ACTIVE=true
 
       # Database
       - DB_TYPE=postgresdb

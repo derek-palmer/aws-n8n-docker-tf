@@ -1,6 +1,5 @@
 variable "domain_name" {}
 variable "subdomain" {}
-variable "route53_zone_id" {}
 
 # --- Request Certificate ---
 # ECDSA P-256 certs are smaller and have faster TLS handshakes than RSA-2048
@@ -15,6 +14,11 @@ resource "aws_acm_certificate" "main" {
 }
 
 # --- Create DNS Validation Records ---
+data "aws_route53_zone" "main" {
+  name         = var.domain_name
+  private_zone = false
+}
+
 resource "aws_route53_record" "cert_validation" {
   for_each = {
     for dvo in aws_acm_certificate.main.domain_validation_options : dvo.domain_name => {
@@ -29,7 +33,7 @@ resource "aws_route53_record" "cert_validation" {
   records         = [each.value.record]
   ttl             = 60
   type            = each.value.type
-  zone_id         = var.route53_zone_id
+  zone_id         = data.aws_route53_zone.main.zone_id
 }
 
 # --- Wait for Validation to Complete ---

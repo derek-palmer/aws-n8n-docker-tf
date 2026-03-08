@@ -22,7 +22,7 @@ permissions:
 
 hooks:
   ApplicationStop:
-    - location: scripts/deploy.sh
+    - location: scripts/stop.sh
       runas: root
       timeout: 60
 

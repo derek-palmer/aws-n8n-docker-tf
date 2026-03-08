@@ -1,5 +1,5 @@
 terraform {
-  required_version = ">= 1.14.0"
+  required_version = ">= 1.7.0"
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -8,13 +8,13 @@ terraform {
   }
 
   # Uncomment and configure after creating your S3 state bucket:
-  #   aws s3api create-bucket --bucket n8n-tf-state --region us-east-1
+  #   aws s3api create-bucket --bucket n8n-tf-state-${AWS_ACCOUNT_ID} --region us-east-1
   #   aws dynamodb create-table --table-name n8n-tf-locks \
   #     --attribute-definitions AttributeName=LockID,AttributeType=S \
   #     --key-schema AttributeName=LockID,KeyType=HASH \
   #     --billing-mode PAY_PER_REQUEST
   # backend "s3" {
-  #   bucket         = "n8n-tf-state"
+  #   bucket         = "n8n-tf-state-${AWS_ACCOUNT_ID}"
   #   key            = "envs/test/terraform.tfstate"
   #   region         = "us-east-1"
   #   dynamodb_table = "n8n-tf-locks"

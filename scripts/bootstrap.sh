@@ -80,7 +80,7 @@ else
 fi
 
 # DynamoDB lock table
-if aws dynamodb describe-table --table-name "${LOCK_TABLE}" 2>/dev/null | grep -q ACTIVE; then
+if aws dynamodb describe-table --table-name "${LOCK_TABLE}" --region "${AWS_REGION}" 2>/dev/null | grep -q ACTIVE; then
   warn "DynamoDB lock table '${LOCK_TABLE}' already exists, skipping."
 else
   aws dynamodb create-table \
@@ -111,7 +111,7 @@ fi
 ECR_REPO_NAME="n8n"
 info "Setting up ECR repository '${ECR_REPO_NAME}'..."
 
-if aws ecr describe-repositories --repository-names "${ECR_REPO_NAME}" 2>/dev/null | grep -q repositoryName; then
+if aws ecr describe-repositories --repository-names "${ECR_REPO_NAME}" --region "${AWS_REGION}" 2>/dev/null | grep -q repositoryName; then
   warn "ECR repository '${ECR_REPO_NAME}' already exists, skipping."
 else
   aws ecr create-repository \
@@ -135,14 +135,7 @@ echo ""
 # Delegate to the dedicated script — it handles all prompting and pushing.
 # We source it so we can pick up the DOMAIN_NAME / SUBDOMAIN variables it sets
 # for use when writing terraform.tfvars below.
-bash "$(dirname "$0")/setup_ssm_params.sh" --env "${ENV}"
-
-# Re-prompt for domain values so we can write terraform.tfvars
-# (setup_ssm_params.sh runs in a subshell so its vars aren't exported here)
-echo ""
-echo -e "${YELLOW}Re-enter domain values for terraform.tfvars:${NC}"
-read -rp "  Root domain name (e.g. example.com): " DOMAIN_NAME
-read -rp "  Subdomain for this env (e.g. n8n-test): " SUBDOMAIN
+source "$(dirname "$0")/setup_ssm_params.sh" --env "${ENV}"
 
 # =============================================================================
 # 5. Update terraform.tfvars

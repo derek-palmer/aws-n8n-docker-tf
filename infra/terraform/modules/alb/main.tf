@@ -1,7 +1,8 @@
-variable "env" {}
-variable "vpc_id" {}
+variable "env" { type = string }
+variable "vpc_id" { type = string }
 variable "subnet_ids" { type = list(string) }
-variable "certificate_arn" {}
+variable "certificate_arn" { type = string }
+variable "ec2_security_group_id" { type = string }
 
 # --- ALB Security Group ---
 resource "aws_security_group" "alb_sg" {
@@ -27,18 +28,20 @@ resource "aws_security_group" "alb_sg" {
     ipv6_cidr_blocks = ["::/0"]
   }
 
-  # Allow all outbound
-  egress {
-    from_port        = 0
-    to_port          = 0
-    protocol         = "-1"
-    cidr_blocks      = ["0.0.0.0/0"]
-    ipv6_cidr_blocks = ["::/0"]
-  }
-
   tags = {
     Name = "n8n-${var.env}-alb-sg"
   }
+}
+
+# Restrict outbound tightly to just the backend application
+# Defined externally to break cyclical dependency between ALB SG and EC2 SG
+resource "aws_security_group_rule" "alb_egress_to_ec2" {
+  type                     = "egress"
+  from_port                = 5678
+  to_port                  = 5678
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.alb_sg.id
+  source_security_group_id = var.ec2_security_group_id
 }
 
 # --- Application Load Balancer ---
@@ -67,9 +70,9 @@ resource "aws_lb_target_group" "n8n" {
   health_check {
     path                = "/healthz"
     healthy_threshold   = 2
-    unhealthy_threshold = 10
+    unhealthy_threshold = 2
     timeout             = 5
-    interval            = 30
+    interval            = 10
     matcher             = "200"
   }
 }

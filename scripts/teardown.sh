@@ -47,7 +47,7 @@ echo ""
 # Verify AWS access
 resolve_aws_profile
 AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-AWS_REGION=$(aws configure get region 2>/dev/null || echo "us-east-1")
+AWS_REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-$(aws configure get region 2>/dev/null || echo "us-east-1")}}"
 STATE_BUCKET="n8n-tf-state-${AWS_ACCOUNT_ID}"
 LOCK_TABLE="n8n-tf-locks"
 
@@ -66,6 +66,15 @@ TF_ENV_DIR="${REPO_ROOT}/infra/terraform/envs/${ENV}"
 if [[ ! -f "${TF_ENV_DIR}/terraform.tfstate" ]] && ! aws s3 ls "s3://${STATE_BUCKET}/envs/${ENV}/terraform.tfstate" &>/dev/null; then
   warn "No Terraform state found for '${ENV}' — skipping tf destroy."
 else
+  docker run --rm -i \
+    -v "${REPO_ROOT}:/workspace" \
+    -w "/workspace/infra/terraform/envs/${ENV}" \
+    -v "${HOME}/.aws:/root/.aws:ro" \
+    -e AWS_PROFILE \
+    -e AWS_REGION \
+    -e AWS_DEFAULT_REGION \
+    hashicorp/terraform:latest init
+    
   docker run --rm -i \
     -v "${REPO_ROOT}:/workspace" \
     -w "/workspace/infra/terraform/envs/${ENV}" \
@@ -101,16 +110,16 @@ fi
 # =============================================================================
 # Step 3: ECR Repository
 # =============================================================================
-info "Step 3/4 — Deleting ECR repository 'n8n'..."
+info "Step 3/4 — Deleting ECR repository 'n8n-${ENV}'..."
 
-if aws ecr describe-repositories --repository-names "n8n" --region "${AWS_REGION}" &>/dev/null; then
+if aws ecr describe-repositories --repository-names "n8n-${ENV}" --region "${AWS_REGION}" &>/dev/null; then
   aws ecr delete-repository \
-    --repository-name "n8n" \
+    --repository-name "n8n-${ENV}" \
     --force \
     --region "${AWS_REGION}" >/dev/null
   success "ECR repository deleted."
 else
-  warn "ECR repository 'n8n' not found — skipping."
+  warn "ECR repository 'n8n-${ENV}' not found — skipping."
 fi
 
 # =============================================================================
@@ -120,7 +129,24 @@ fi
 info "Step 4/4 — Deleting Terraform state backend (S3 + DynamoDB)..."
 
 if aws s3api head-bucket --bucket "${STATE_BUCKET}" &>/dev/null; then
-  # Empty and delete the bucket (force-removes all versioned objects)
+  # Empty all objects and object versions via aws s3api to guarantee deletion
+  info "Clearing versioned objects from S3 bucket ${STATE_BUCKET}..."
+  versions=$(aws s3api list-object-versions --bucket "${STATE_BUCKET}" --output=json 2>/dev/null || echo '{"Versions":[],"DeleteMarkers":[]}')
+  if [[ -n "${versions}" && "${versions}" != '{"Versions":[],"DeleteMarkers":[]}' ]]; then
+    # We construct the payload, ignoring empty arrays
+    delete_json='{"Objects": []}'
+    while IFS= read -r key && IFS= read -r versionId; do
+        if [[ -n "${key}" && -n "${versionId}" && "${versionId}" != "null" ]]; then
+            # Append object to JSON array
+            delete_json=$(echo "${delete_json}" | jq ".Objects += [{\"Key\": \"${key}\", \"VersionId\": \"${versionId}\"}]")
+        fi
+    done < <(echo "${versions}" | jq -r '(.Versions[]? | .Key, .VersionId), (.DeleteMarkers[]? | .Key, .VersionId)')
+
+    # Run the bulk delete if Objects array is not empty
+    if [[ $(echo "${delete_json}" | jq '.Objects | length') -gt 0 ]]; then
+      aws s3api delete-objects --bucket "${STATE_BUCKET}" --delete "${delete_json}" >/dev/null
+    fi
+  fi
   aws s3 rb "s3://${STATE_BUCKET}" --force >/dev/null
   success "Deleted S3 state bucket: ${STATE_BUCKET}"
 else

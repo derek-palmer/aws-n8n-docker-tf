@@ -14,7 +14,7 @@ TF_CMD = docker run --rm -i \
 	-e AWS_PROFILE \
 	-e AWS_REGION \
 	-e AWS_DEFAULT_REGION \
-	hashicorp/terraform:latest
+	hashicorp/terraform:1.7
 
 # Credentials are resolved on the host (handles SSO) then injected into
 # amazon/aws-cli (bash 5, aws-cli v2, openssl) as standard env vars.
@@ -60,7 +60,7 @@ setup-local:
 	$(LOCAL_SCRIPT_CMD) scripts/setup_local_env.sh
 
 up-local:
-	docker compose -f docker-compose.yml -f docker-compose.local.yml --env-file .env.local up -d --wait
+	docker compose -f docker-compose.yml -f docker-compose.local.yml --env-file .env.local up -d --build --wait
 	@echo ""
 	@echo "  ✅ n8n is running → http://localhost:5678"
 	@echo ""
@@ -100,5 +100,5 @@ tf-plan: tf-validate
 tf-apply: tf-validate
 	$(TF_CMD) apply $(ARGS)
 
-tf-destroy:
+tf-destroy: tf-validate
 	$(TF_CMD) destroy $(ARGS)

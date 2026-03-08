@@ -119,6 +119,10 @@ resource "aws_instance" "n8n" {
   # Start Docker
   systemctl enable docker
   systemctl start docker
+
+  # Ensure ssm-user exists before we attach groups to it. 
+  # SSM agent usually generates this on first connection, but this crashes cloud-init.
+  id -u ssm-user &>/dev/null || useradd ssm-user
   usermod -aG docker ssm-user
   usermod -aG docker ec2-user
 
@@ -158,4 +162,7 @@ output "instance_id" {
 }
 output "instance_public_ip" {
   value = aws_instance.n8n.public_ip
+}
+output "security_group_id" {
+  value = aws_security_group.ec2_sg.id
 }

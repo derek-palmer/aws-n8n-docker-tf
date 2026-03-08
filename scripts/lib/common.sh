@@ -33,6 +33,14 @@ resolve_aws_profile() {
     return 0
   fi
 
+  # If AWS_PROFILE is already explicitly exported and valid, just verify and return
+  if [[ -n "${AWS_PROFILE:-}" ]]; then
+    aws sts get-caller-identity --query Account --output text &>/dev/null \
+      || error "AWS credentials for profile '${AWS_PROFILE}' are not active.\nRun 'awslogin' in your terminal first, then retry."
+    info "Using explicitly provided AWS profile: ${AWS_PROFILE}"
+    return 0
+  fi
+
   # No static credentials — try to pick a profile (host/direct-run path)
   local profiles
   profiles=$(aws configure list-profiles 2>/dev/null) \

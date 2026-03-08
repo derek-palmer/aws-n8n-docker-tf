@@ -26,5 +26,48 @@ resource "aws_ssm_patch_group" "n8n" {
   patch_group = "n8n-${var.env}"
 }
 
+# Create a Maintenance Window for automated patching (Every Sunday at 2 AM)
+resource "aws_ssm_maintenance_window" "n8n_patching" {
+  name     = "n8n-${var.env}-maintenance-window"
+  schedule = "cron(0 2 ? * SUN *)"
+  duration = 3
+  cutoff   = 1
+}
+
+# Target instances with the specific patch group tag
+resource "aws_ssm_maintenance_window_target" "n8n_patching_target" {
+  window_id     = aws_ssm_maintenance_window.n8n_patching.id
+  resource_type = "INSTANCE"
+
+  targets {
+    key    = "tag:Patch Group"
+    values = ["n8n-${var.env}"]
+  }
+}
+
+# Create a task to run the patch installation during the maintenance window
+resource "aws_ssm_maintenance_window_task" "n8n_patching_task" {
+  window_id       = aws_ssm_maintenance_window.n8n_patching.id
+  task_type       = "RUN_COMMAND"
+  task_arn        = "AWS-RunPatchBaseline"
+  priority        = 1
+  max_concurrency = "1"
+  max_errors      = "1"
+
+  targets {
+    key    = "WindowTargetIds"
+    values = [aws_ssm_maintenance_window_target.n8n_patching_target.id]
+  }
+
+  task_invocation_parameters {
+    run_command_parameters {
+      parameter {
+        name   = "Operation"
+        values = ["Install"]
+      }
+    }
+  }
+}
+
 # Note: The EC2 instance must have the tag `Patch Group: n8n-${var.env}` to be
 # enrolled in this baseline. This is set in the ec2_n8n module.

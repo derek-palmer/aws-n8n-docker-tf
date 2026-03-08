@@ -31,9 +31,6 @@ phases:
       - docker push $ECR_REPO_URL:$IMAGE_TAG
       - docker push $ECR_REPO_URL:latest
 
-      # Write image details for CodeDeploy to pick up
-      - printf '[{"name":"n8n","imageUri":"%s"}]' "$ECR_REPO_URL:$IMAGE_TAG" > imagedefinitions.json
-
       # Inject IMAGE_TAG into the env file for deploy.sh to use on the instance
       - echo "IMAGE_TAG=$IMAGE_TAG" >> .env.$ENV
 
@@ -42,7 +39,6 @@ artifacts:
     - docker-compose.yml
     - docker-compose.aws.yml
     - scripts/**/*
-    - imagedefinitions.json
     - appspec.yml
     - .env.$ENV
   discard-paths: no
