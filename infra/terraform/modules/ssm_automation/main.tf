@@ -91,5 +91,5 @@ resource "aws_ssm_association" "codedeploy_agent" {
   # Avoid racing with cloud-init (which installs Ruby, a prerequisite).
   # Only run on the scheduled interval, not immediately on instance registration.
   apply_only_at_cron_interval = true
-  schedule_expression         = "rate(30 minutes)"
+  schedule_expression         = "cron(0/30 * * * ? *)"
 }
