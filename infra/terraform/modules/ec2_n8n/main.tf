@@ -130,6 +130,17 @@ resource "aws_instance" "n8n" {
   mkdir -p /usr/local/lib/docker/cli-plugins
   curl --fail -SL "https://github.com/docker/compose/releases/download/${var.docker_compose_version}/docker-compose-linux-aarch64" -o /usr/local/lib/docker/cli-plugins/docker-compose
   chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+
+  # Install CodeDeploy Agent
+  # AL2023 requires ruby and wget
+  dnf install -y ruby wget
+  cd /home/ec2-user
+  wget https://aws-codedeploy-${data.aws_region.current.id}.s3.${data.aws_region.current.id}.amazonaws.com/latest/install
+  chmod +x ./install
+  # Use generic 'auto' for AL2023
+  ./install auto
+  systemctl enable codedeploy-agent
+  systemctl start codedeploy-agent
   
   # Prepare app directory struct
   mkdir -p /opt/n8n-app
