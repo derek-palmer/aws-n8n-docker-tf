@@ -3,10 +3,10 @@
 
 services:
   n8n:
-    # Bind to loopback only — the ALB forwards traffic internally over the VPC.
-    # This prevents direct public access even if a security group rule is ever misconfigured.
+    # Bind to all interfaces so the ALB can reach port 5678 over the VPC.
+    # The EC2 security group restricts inbound 5678 to ALB traffic only.
     ports:
-      - "127.0.0.1:5678:5678"
+      - "5678:5678"
 
     # JSON file logging — readable by CloudWatch Agent or Fluent Bit
     logging:
