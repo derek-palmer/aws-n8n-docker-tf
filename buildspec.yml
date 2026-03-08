@@ -18,8 +18,8 @@ phases:
 
   build:
     commands:
-      - echo "Building docker-compose images..."
-      - docker compose -f docker-compose.yml -f docker-compose.aws.yml build
+      - echo "Pulling latest n8n image from Docker Hub..."
+      - docker pull n8nio/n8n:latest
 
       - echo "Tagging image..."
       - docker tag n8nio/n8n:latest $ECR_REPO_URL:$IMAGE_TAG
