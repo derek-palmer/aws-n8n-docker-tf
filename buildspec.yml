@@ -18,7 +18,7 @@ phases:
 
   build:
     commands:
-      - echo "Pulling pinned n8n image: $N8N_UPSTREAM_REF"
+      - echo "Pulling pinned n8n image from $N8N_UPSTREAM_REF"
       - docker pull "$N8N_UPSTREAM_REF"
       
       - echo "Tagging image..."
