@@ -9,6 +9,16 @@ variable "ssm_kms_key_id" {
   default     = ""
 }
 
+variable "artifact_bucket_name" {
+  description = "S3 bucket name for CodePipeline/CodeDeploy artifacts"
+  type        = string
+}
+
+variable "artifact_kms_key_arn" {
+  description = "ARN of the KMS key used to encrypt pipeline artifacts"
+  type        = string
+}
+
 data "aws_region" "current" {}
 data "aws_caller_identity" "current" {}
 
@@ -112,6 +122,35 @@ resource "aws_iam_policy" "cloudwatch" {
 resource "aws_iam_role_policy_attachment" "cloudwatch" {
   role       = aws_iam_role.ec2_role.name
   policy_arn = aws_iam_policy.cloudwatch.arn
+}
+
+# --- CodeDeploy Artifact Access Policy ---
+# Allows the EC2 instance to read deployment artifacts from the pipeline S3
+# bucket and decrypt them with the associated KMS key.
+resource "aws_iam_policy" "codedeploy_artifacts" {
+  name        = "n8n-${var.env}-codedeploy-artifacts-policy"
+  description = "Allow EC2 to read CodeDeploy artifacts from S3 and decrypt with KMS"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = ["s3:GetObject", "s3:GetObjectVersion"]
+        Resource = "arn:aws:s3:::${var.artifact_bucket_name}/*"
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["kms:Decrypt", "kms:GenerateDataKey"]
+        Resource = var.artifact_kms_key_arn
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "codedeploy_artifacts" {
+  role       = aws_iam_role.ec2_role.name
+  policy_arn = aws_iam_policy.codedeploy_artifacts.arn
 }
 
 # --- Instance Profile ---

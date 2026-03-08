@@ -14,6 +14,9 @@ module "vpc" {
 module "iam" {
   source = "../iam"
   env    = var.env
+
+  artifact_bucket_name = aws_s3_bucket.artifacts.id
+  artifact_kms_key_arn = aws_kms_key.artifacts.arn
 }
 
 module "route53" {
