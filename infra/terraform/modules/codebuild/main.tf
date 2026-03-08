@@ -102,6 +102,12 @@ resource "aws_iam_role_policy" "codebuild" {
           "ecr:BatchGetImage"
         ]
         Resource = var.ecr_repository_arn
+      },
+      {
+        # Allow use of the CodeStar connection to clone from GitHub
+        Effect   = "Allow"
+        Action   = ["codestar-connections:UseConnection"]
+        Resource = var.codestar_connection_arn
       }
     ]
   })
