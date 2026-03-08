@@ -167,7 +167,7 @@ module "codebuild" {
   github_repo             = var.github_repo
   codestar_connection_arn = var.codestar_connection_arn
   ecr_repository_url      = var.ecr_repository_url
-  ecr_repository_arn      = "arn:aws:ecr:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:repository/${replace(var.ecr_repository_url, "/^[^/]+//", "")}"
+  ecr_repository_arn      = var.ecr_repository_arn
   artifact_bucket_name    = aws_s3_bucket.artifacts.id
   kms_key_arn             = aws_kms_key.artifacts.arn
 }

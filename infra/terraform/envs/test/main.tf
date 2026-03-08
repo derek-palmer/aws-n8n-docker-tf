@@ -46,6 +46,7 @@ module "stack" {
   github_branch           = var.github_branch
   codestar_connection_arn = var.codestar_connection_arn
   ecr_repository_url      = var.ecr_repository_url
+  ecr_repository_arn      = var.ecr_repository_arn
 }
 
 output "n8n_url" { value = module.stack.n8n_url }

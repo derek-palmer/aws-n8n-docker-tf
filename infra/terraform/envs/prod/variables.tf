@@ -16,3 +16,4 @@ variable "github_branch" {
 }
 variable "codestar_connection_arn" { type = string }
 variable "ecr_repository_url" { type = string }
+variable "ecr_repository_arn" { type = string }

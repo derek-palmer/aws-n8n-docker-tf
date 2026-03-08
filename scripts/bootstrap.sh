@@ -123,6 +123,7 @@ else
 fi
 
 ECR_URL="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO_NAME}"
+ECR_ARN="arn:aws:ecr:${AWS_REGION}:${AWS_ACCOUNT_ID}:repository/${ECR_REPO_NAME}"
 success "ECR URL: ${ECR_URL}"
 
 # =============================================================================
@@ -185,6 +186,7 @@ github_repo             = "${GITHUB_REPO}"
 github_branch           = "${GITHUB_BRANCH}"
 codestar_connection_arn = "${CODESTAR_ARN}"
 ecr_repository_url      = "${ECR_URL}"
+ecr_repository_arn      = "${ECR_ARN}"
 EOF
 
 success "Updated ${TFVARS}"

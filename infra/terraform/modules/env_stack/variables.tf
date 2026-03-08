@@ -51,3 +51,8 @@ variable "ecr_repository_url" {
   description = "URL of the ECR repository to push/pull Docker images"
   type        = string
 }
+
+variable "ecr_repository_arn" {
+  description = "ARN of the exact ECR repository (for CodeBuild Push IAM policies)"
+  type        = string
+}
