@@ -88,6 +88,8 @@ resource "aws_ssm_association" "codedeploy_agent" {
     name   = "AWSCodeDeployAgent"
   }
 
-  # Ensure the agent is installed on boot and kept up to date
-  schedule_expression = "rate(1 day)"
+  # Avoid racing with cloud-init (which installs Ruby, a prerequisite).
+  # Only run on the scheduled interval, not immediately on instance registration.
+  apply_only_at_cron_interval = true
+  schedule_expression         = "rate(10 minutes)"
 }
