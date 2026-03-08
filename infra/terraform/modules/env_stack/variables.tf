@@ -42,6 +42,12 @@ variable "github_branch" {
   default     = "main"
 }
 
+variable "n8n_upstream_ref" {
+  description = "The upstream n8n docker image reference to pull (e.g. n8nio/n8n:latest or n8nio/n8n@sha256:...)"
+  type        = string
+  default     = "n8nio/n8n:latest"
+}
+
 variable "codestar_connection_arn" {
   description = "ARN of the AWS CodeStar Connection to GitHub"
   type        = string

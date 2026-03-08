@@ -14,6 +14,10 @@ variable "github_branch" {
   type    = string
   default = "main"
 }
+variable "n8n_upstream_ref" {
+  type    = string
+  default = "n8nio/n8n:latest"
+}
 variable "codestar_connection_arn" { type = string }
 variable "ecr_repository_url" { type = string }
 variable "ecr_repository_arn" { type = string }

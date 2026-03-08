@@ -54,6 +54,7 @@ module "stack" {
   github_repo             = var.github_repo
   github_branch           = var.github_branch
   codestar_connection_arn = var.codestar_connection_arn
+  n8n_upstream_ref        = var.n8n_upstream_ref
   ecr_repository_url      = var.ecr_repository_url
   ecr_repository_arn      = var.ecr_repository_arn
 }
