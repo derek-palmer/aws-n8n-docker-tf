@@ -9,7 +9,7 @@
 # ⚠️  THIS IS IRREVERSIBLE. All data will be lost.
 #
 # Usage:
-#   AWS_PROFILE=<profile> bash scripts/teardown.sh --env test
+#   bash scripts/teardown.sh --env test
 # =============================================================================
 
 set -euo pipefail

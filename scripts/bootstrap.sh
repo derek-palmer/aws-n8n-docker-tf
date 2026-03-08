@@ -6,11 +6,11 @@
 # before running `make tf-apply`.
 #
 # Usage:
-#   aws sso login --profile <profile>
-#   AWS_PROFILE=<profile> bash scripts/bootstrap.sh
+#   awslogin
+#   bash scripts/bootstrap.sh
 #
 # Or with explicit env:
-#   AWS_PROFILE=<profile> bash scripts/bootstrap.sh --env test
+#   bash scripts/bootstrap.sh --env test
 # =============================================================================
 
 set -euo pipefail
@@ -202,7 +202,7 @@ echo -e "${GREEN}============================================================${N
 echo ""
 echo "  Next steps:"
 echo ""
-echo -e "  1. ${CYAN}AWS_PROFILE=<profile> make tf-init env=${ENV}${NC}"
-echo -e "  2. ${CYAN}AWS_PROFILE=<profile> make tf-plan env=${ENV}${NC}"
-echo -e "  3. ${CYAN}AWS_PROFILE=<profile> make tf-apply env=${ENV} ARGS=-auto-approve${NC}"
+echo -e "  1. ${CYAN}make tf-init env=${ENV}${NC}"
+echo -e "  2. ${CYAN}make tf-plan env=${ENV}${NC}"
+echo -e "  3. ${CYAN}make tf-apply env=${ENV} ARGS=-auto-approve${NC}"
 echo ""

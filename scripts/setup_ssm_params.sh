@@ -5,8 +5,8 @@
 # Safe to re-run — skips params that already exist unless --overwrite is passed.
 #
 # Usage:
-#   AWS_PROFILE=<profile> bash scripts/setup_ssm_params.sh --env test
-#   AWS_PROFILE=<profile> bash scripts/setup_ssm_params.sh --env prod --overwrite
+#   bash scripts/setup_ssm_params.sh --env test
+#   bash scripts/setup_ssm_params.sh --env prod --overwrite
 # =============================================================================
 
 set -euo pipefail
