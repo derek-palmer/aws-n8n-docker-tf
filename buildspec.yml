@@ -20,10 +20,14 @@ phases:
     commands:
       - echo "Pulling latest n8n image from Docker Hub..."
       - docker pull n8nio/n8n:latest
+      
+      - echo "Capturing upstream digest for reproducible tagging..."
+      - UPSTREAM_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' n8nio/n8n:latest)
+      - echo "Pinned upstream digest = $UPSTREAM_DIGEST"
 
       - echo "Tagging image..."
-      - docker tag n8nio/n8n:latest $ECR_REPO_URL:$IMAGE_TAG
-      - docker tag n8nio/n8n:latest $ECR_REPO_URL:latest
+      - docker tag $UPSTREAM_DIGEST $ECR_REPO_URL:$IMAGE_TAG
+      - docker tag $UPSTREAM_DIGEST $ECR_REPO_URL:latest
 
   post_build:
     commands:
