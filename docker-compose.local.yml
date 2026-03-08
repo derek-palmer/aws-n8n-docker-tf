@@ -1,0 +1,27 @@
+# Local Development Override
+# Merged with docker-compose.yml when running `make up-local`.
+# Exposes ports for direct browser/DB access and enables the n8n tunnel for webhook testing.
+
+services:
+  n8n:
+    # Expose the n8n UI to your browser at http://localhost:5678
+    ports:
+      - "${N8N_PORT:-5678}:5678"
+    environment:
+      - NODE_ENV=development
+      - N8N_LOG_LEVEL=debug
+      - EXECUTIONS_DATA_SAVE_ON_ERROR=all
+      - EXECUTIONS_DATA_SAVE_ON_SUCCESS=all
+      - EXECUTIONS_DATA_SAVE_ON_PROGRESS=true
+      - EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS=true
+      # Built-in HTTPS tunnel for testing webhooks from external services locally.
+      # n8n will log the public URL on startup, e.g: https://abc123.hooks.n8n.cloud
+      # Use that URL when configuring webhooks in GitHub, Stripe, Slack, etc.
+      - N8N_TUNNEL=true
+
+  postgres:
+    # Expose Postgres for direct access via TablePlus, psql, etc.
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_LOG_STATEMENT=all

@@ -1,0 +1,32 @@
+version: 0.0
+os: linux
+
+# AppSpec for CodeDeploy in-place deployment to the n8n EC2 instance.
+# This file is included in the build artifact and consumed by CodeDeploy.
+
+files:
+  # Copy compose files and scripts to the app directory on the EC2 instance
+  - source: docker-compose.yml
+    destination: /opt/n8n-app
+  - source: docker-compose.aws.yml
+    destination: /opt/n8n-app
+  - source: scripts
+    destination: /opt/n8n-app/scripts
+
+permissions:
+  - object: /opt/n8n-app/scripts
+    pattern: "**"
+    mode: "755"
+    type:
+      - file
+
+hooks:
+  ApplicationStop:
+    - location: scripts/stop.sh
+      runas: root
+      timeout: 60
+
+  AfterInstall:
+    - location: scripts/deploy.sh
+      runas: root
+      timeout: 180
