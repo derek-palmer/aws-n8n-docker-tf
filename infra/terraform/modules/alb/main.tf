@@ -1,6 +1,6 @@
 variable "env" {}
 variable "vpc_id" {}
-variable "subnet_id" {}
+variable "subnet_ids" { type = list(string) }
 variable "instance_id" {}
 variable "certificate_arn" {}
 
@@ -48,7 +48,7 @@ resource "aws_lb" "main" {
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb_sg.id]
-  subnets            = [var.subnet_id]
+  subnets            = var.subnet_ids
 
   enable_deletion_protection = false
   drop_invalid_header_fields = true

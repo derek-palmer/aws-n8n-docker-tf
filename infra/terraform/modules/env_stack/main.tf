@@ -32,7 +32,7 @@ module "alb" {
   source          = "../alb"
   env             = var.env
   vpc_id          = module.vpc.vpc_id
-  subnet_id       = module.vpc.public_subnet_id
+  subnet_ids      = module.vpc.public_subnet_ids
   instance_id     = module.ec2_n8n.instance_id
   certificate_arn = module.acm.certificate_arn
 }
