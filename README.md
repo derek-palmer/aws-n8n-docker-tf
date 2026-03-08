@@ -97,13 +97,36 @@ You extend the modules as your needs grow.
 
 ## Getting started
 
+### AWS Authentication
+
+Add a login alias to your `~/.zshrc` (or `~/.bashrc`) so credentials and profile are set in one step:
+
+```bash
+awslogin() { export AWS_PROFILE=<your-profile>; aws sso login; }
+```
+
+Then just run `awslogin` before any AWS work. All `make` and `aws` commands will pick up the profile automatically.
+
+> [!TIP]
+> For multiple accounts, create one alias per profile:
+> ```bash
+> awslogin-dev()  { export AWS_PROFILE=my-dev;  aws sso login; }
+> awslogin-prod() { export AWS_PROFILE=my-prod; aws sso login; }
+> ```
+
+Or, without an alias:
+
+```bash
+aws sso login --profile <your-profile>
+export AWS_PROFILE=<your-profile>
+```
+
+### Bootstrap
+
 After cloning this template, run `make bootstrap` once per environment. It handles every one-time AWS setup step automatically:
 
 ```bash
-# Install local requirements first (see Prerequisites below), then:
-aws sso login --profile <profile>
-export AWS_PROFILE=<profile>
-
+awslogin
 make bootstrap env=test
 ```
 
@@ -170,18 +193,11 @@ The leaf segment of each path becomes the env var name injected into the contain
 Local dev runs via Docker Compose, but loads config from SSM so it mirrors AWS.
 *Note: Terraform commands run inside Docker; credentials come from your configured AWS SSO profile via the `~/.aws` mount.*
 
-1. [Configure AWS SSO](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sso.html) if you haven't already, then log in:
+1. Log in (see [AWS Authentication](#aws-authentication) above):
 
 ```bash
-aws sso login --profile <profile>
-export AWS_PROFILE=<profile>
+awslogin
 ```
-
-> [!TIP]
-> Add an alias to your shell config (`~/.zshrc` or `~/.bashrc`) to make this a one-liner:
-> ```bash
-> alias aws-login='aws sso login --profile <profile> && export AWS_PROFILE=<profile>'
-> ```
 
 2. Create `/n8n/local/...` SSM parameters:
 
@@ -241,7 +257,7 @@ No SSH port is exposed. Use AWS Systems Manager Session Manager instead.
 CLI example:
 
 ```bash
-AWS_PROFILE=<profile> aws ssm start-session --target <instance-id>
+aws ssm start-session --target <instance-id>
 ```
 
 ---

@@ -6,7 +6,7 @@ env ?= local
 
 # Containerized Terraform — no local Terraform install needed.
 # AWS SSO credentials are picked up via AWS_PROFILE + the ~/.aws mount (includes sso/cache/).
-# Usage: make tf-plan env=test   (after: aws sso login && export AWS_PROFILE=<profile>)
+# Usage: make tf-plan env=test   (after running your awslogin alias)
 TF_CMD = docker run --rm -i \
 	-v "$(PWD):/workspace" \
 	-w "/workspace/infra/terraform/envs/$(env)" \
