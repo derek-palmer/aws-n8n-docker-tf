@@ -34,59 +34,20 @@ variable "codedeploy_group_name" {
   type        = string
 }
 
+variable "artifact_bucket_name" {
+  description = "S3 bucket name for CodePipeline artifacts"
+  type        = string
+}
+
+variable "kms_key_arn" {
+  description = "ARN of the Customer Managed KMS Key encrypting the artifact bucket"
+  type        = string
+}
+
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
-# --- S3 Bucket for Pipeline Artifacts ---
-resource "aws_s3_bucket" "artifacts" {
-  bucket        = "n8n-${var.env}-pipeline-artifacts-${data.aws_caller_identity.current.account_id}"
-  force_destroy = true # Safe for a CI artifact store
 
-  tags = {
-    Name = "n8n-${var.env}-pipeline-artifacts"
-  }
-}
-
-resource "aws_s3_bucket_versioning" "artifacts" {
-  bucket = aws_s3_bucket.artifacts.id
-  versioning_configuration {
-    status = "Enabled"
-  }
-}
-
-resource "aws_s3_bucket_server_side_encryption_configuration" "artifacts" {
-  bucket = aws_s3_bucket.artifacts.id
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
-    }
-  }
-}
-
-resource "aws_s3_bucket_public_access_block" "artifacts" {
-  bucket                  = aws_s3_bucket.artifacts.id
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
-
-resource "aws_s3_bucket_lifecycle_configuration" "artifacts" {
-  bucket = aws_s3_bucket.artifacts.id
-
-  rule {
-    id     = "expire-old-artifacts"
-    status = "Enabled"
-
-    expiration {
-      days = 30
-    }
-
-    noncurrent_version_expiration {
-      noncurrent_days = 7
-    }
-  }
-}
 
 # --- CodePipeline IAM Role ---
 resource "aws_iam_role" "codepipeline" {
@@ -113,11 +74,17 @@ resource "aws_iam_role_policy" "codepipeline" {
     Statement = [
       {
         Effect = "Allow"
-        Action = ["s3:GetObject", "s3:PutObject", "s3:GetBucketVersioning"]
+        Action = ["s3:GetObject", "s3:GetObjectVersion", "s3:PutObject", "s3:GetBucketVersioning"]
         Resource = [
-          aws_s3_bucket.artifacts.arn,
-          "${aws_s3_bucket.artifacts.arn}/*"
+          "arn:aws:s3:::${var.artifact_bucket_name}",
+          "arn:aws:s3:::${var.artifact_bucket_name}/*"
         ]
+      },
+      {
+        # Allow use of the KMS key for artifact encryption
+        Effect   = "Allow"
+        Action   = ["kms:Decrypt", "kms:GenerateDataKey"]
+        Resource = var.kms_key_arn
       },
       {
         # Allow pipeline to trigger the CodeBuild project
@@ -158,8 +125,13 @@ resource "aws_codepipeline" "n8n" {
   role_arn = aws_iam_role.codepipeline.arn
 
   artifact_store {
-    location = aws_s3_bucket.artifacts.bucket
+    location = var.artifact_bucket_name
     type     = "S3"
+
+    encryption_key {
+      id   = var.kms_key_arn
+      type = "KMS"
+    }
   }
 
   # Stage 1: Pull source from GitHub via CodeStar Connection
@@ -232,6 +204,4 @@ output "pipeline_name" {
   value = aws_codepipeline.n8n.name
 }
 
-output "artifact_bucket_name" {
-  value = aws_s3_bucket.artifacts.bucket
-}
+

@@ -2,6 +2,9 @@
 # The single source of truth for wiring all n8n infrastructure modules together.
 # This module is called once per environment from infra/terraform/envs/<env>/main.tf.
 
+data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
+
 module "vpc" {
   source = "../vpc"
   env    = var.env
@@ -74,6 +77,77 @@ module "codedeploy" {
   env    = var.env
 }
 
+# --- CI/CD Artifacts (Shared KMS + S3) ---
+
+resource "aws_kms_key" "artifacts" {
+  description             = "KMS key for CodePipeline artifacts in ${var.env}"
+  deletion_window_in_days = 7
+  enable_key_rotation     = true
+}
+
+resource "aws_kms_alias" "artifacts" {
+  name          = "alias/n8n-${var.env}-artifacts"
+  target_key_id = aws_kms_key.artifacts.key_id
+}
+
+resource "aws_s3_bucket" "artifacts" {
+  bucket        = "n8n-${var.env}-pipeline-artifacts-${data.aws_caller_identity.current.account_id}"
+  force_destroy = true # Safe for a CI artifact store
+
+  tags = {
+    Name = "n8n-${var.env}-pipeline-artifacts"
+  }
+}
+
+resource "aws_s3_bucket_versioning" "artifacts" {
+  bucket = aws_s3_bucket.artifacts.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "artifacts" {
+  bucket = aws_s3_bucket.artifacts.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm     = "aws:kms"
+      kms_master_key_id = aws_kms_key.artifacts.arn
+    }
+    bucket_key_enabled = true
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "artifacts" {
+  bucket                  = aws_s3_bucket.artifacts.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "artifacts" {
+  bucket = aws_s3_bucket.artifacts.id
+
+  rule {
+    id     = "expire-old-artifacts"
+    status = "Enabled"
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+
+    expiration {
+      days = 30
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 7
+    }
+  }
+}
+
+# --- CI/CD Pipelines ---
+
 module "codepipeline" {
   source                  = "../codepipeline"
   env                     = var.env
@@ -83,6 +157,8 @@ module "codepipeline" {
   codebuild_project_name  = module.codebuild.project_name
   codedeploy_app_name     = module.codedeploy.app_name
   codedeploy_group_name   = module.codedeploy.deployment_group_name
+  artifact_bucket_name    = aws_s3_bucket.artifacts.id
+  kms_key_arn             = aws_kms_key.artifacts.arn
 }
 
 module "codebuild" {
@@ -91,5 +167,7 @@ module "codebuild" {
   github_repo             = var.github_repo
   codestar_connection_arn = var.codestar_connection_arn
   ecr_repository_url      = var.ecr_repository_url
-  artifact_bucket_name    = module.codepipeline.artifact_bucket_name
+  ecr_repository_arn      = "arn:aws:ecr:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:repository/${replace(var.ecr_repository_url, "/^[^/]+//", "")}"
+  artifact_bucket_name    = aws_s3_bucket.artifacts.id
+  kms_key_arn             = aws_kms_key.artifacts.arn
 }

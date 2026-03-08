@@ -18,8 +18,18 @@ variable "ecr_repository_url" {
   type        = string
 }
 
+variable "ecr_repository_arn" {
+  description = "ARN of the ECR repository to push docker images to"
+  type        = string
+}
+
 variable "artifact_bucket_name" {
   description = "S3 bucket name for CodePipeline artifacts"
+  type        = string
+}
+
+variable "kms_key_arn" {
+  description = "ARN of the Customer Managed KMS Key encrypting the artifact bucket"
   type        = string
 }
 
@@ -62,11 +72,17 @@ resource "aws_iam_role_policy" "codebuild" {
       {
         # Read artifacts from and write artifacts to the pipeline bucket
         Effect = "Allow"
-        Action = ["s3:GetObject", "s3:PutObject", "s3:GetBucketVersioning"]
+        Action = ["s3:GetObject", "s3:GetObjectVersion", "s3:PutObject", "s3:GetBucketVersioning"]
         Resource = [
           "arn:aws:s3:::${var.artifact_bucket_name}",
           "arn:aws:s3:::${var.artifact_bucket_name}/*"
         ]
+      },
+      {
+        # Allow use of the KMS key for artifact encryption
+        Effect   = "Allow"
+        Action   = ["kms:Decrypt", "kms:GenerateDataKey"]
+        Resource = var.kms_key_arn
       },
       {
         # Authenticate to ECR
@@ -85,7 +101,7 @@ resource "aws_iam_role_policy" "codebuild" {
           "ecr:PutImage",
           "ecr:BatchGetImage"
         ]
-        Resource = "arn:aws:ecr:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:repository/${split("/", var.ecr_repository_url)[1]}"
+        Resource = var.ecr_repository_arn
       }
     ]
   })

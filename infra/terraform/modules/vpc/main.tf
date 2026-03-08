@@ -53,9 +53,13 @@ resource "aws_internet_gateway" "igw" {
 
 # --- Public Subnets ---
 resource "aws_subnet" "public" {
-  vpc_id                  = aws_vpc.main.id
-  cidr_block              = var.public_subnet_cidr
-  availability_zone       = var.az
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = var.public_subnet_cidr
+  availability_zone = var.az
+  # We purposefully enable auto-assigning public IPv4 addresses. This allows our 
+  # EC2 instances in this subnet to natively reach out to the internet (for SSM, 
+  # DockerHub, AWS APIs) via the Internet Gateway without requiring an expensive 
+  # NAT Gateway ($32+/mo base cost).
   map_public_ip_on_launch = true
 
   tags = {
@@ -67,7 +71,8 @@ resource "aws_subnet" "public_2" {
   vpc_id     = aws_vpc.main.id
   cidr_block = var.public_subnet_2_cidr
   # Pick an AZ that is distinct from var.az
-  availability_zone       = element(tolist(setsubtract(data.aws_availability_zones.available.names, [var.az])), 0)
+  availability_zone = element(tolist(setsubtract(data.aws_availability_zones.available.names, [var.az])), 0)
+  # See comment in 'public' subnet for rationale avoiding NAT Gateway.
   map_public_ip_on_launch = true
 
   tags = {
