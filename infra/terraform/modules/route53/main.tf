@@ -1,4 +1,7 @@
-variable "domain_name" {}
+variable "domain_name" {
+  type        = string
+  description = "The target root domain name (e.g. example.com)"
+}
 
 data "aws_route53_zone" "main" {
   name         = var.domain_name

@@ -3,6 +3,12 @@ variable "env" {
   type        = string
 }
 
+variable "ssm_kms_key_id" {
+  description = "Specific KMS Key ID used to encrypt SSM SecureStrings. If not provided, allows decryption via the SSM service broadly."
+  type        = string
+  default     = ""
+}
+
 data "aws_region" "current" {}
 data "aws_caller_identity" "current" {}
 
@@ -54,17 +60,18 @@ resource "aws_iam_policy" "parameter_store" {
         ]
         Resource = "arn:aws:ssm:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:parameter/n8n/${var.env}/*"
       },
-      {
-        # Required for SecureString parameters encrypted with the default AWS-managed key
+      merge({
+        # Required for SecureString parameters encrypted with KMS
         Effect   = "Allow"
         Action   = ["kms:Decrypt"]
-        Resource = "arn:aws:kms:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:key/*"
+        Resource = var.ssm_kms_key_id != "" ? "arn:aws:kms:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:key/${var.ssm_kms_key_id}" : "arn:aws:kms:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:key/*"
+        }, var.ssm_kms_key_id == "" ? {
         Condition = {
           StringEquals = {
             "kms:ViaService" = "ssm.${data.aws_region.current.id}.amazonaws.com"
           }
         }
-      }
+      } : {})
     ]
   })
 }

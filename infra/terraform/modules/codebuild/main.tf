@@ -69,10 +69,15 @@ resource "aws_iam_role_policy" "codebuild" {
         ]
       },
       {
-        # Authenticate to ECR and push images
+        # Authenticate to ECR
+        Effect   = "Allow"
+        Action   = ["ecr:GetAuthorizationToken"]
+        Resource = "*"
+      },
+      {
+        # Push images to the specific ECR repository
         Effect = "Allow"
         Action = [
-          "ecr:GetAuthorizationToken",
           "ecr:BatchCheckLayerAvailability",
           "ecr:InitiateLayerUpload",
           "ecr:UploadLayerPart",
@@ -80,7 +85,7 @@ resource "aws_iam_role_policy" "codebuild" {
           "ecr:PutImage",
           "ecr:BatchGetImage"
         ]
-        Resource = "*"
+        Resource = "arn:aws:ecr:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:repository/${split("/", var.ecr_repository_url)[1]}"
       }
     ]
   })

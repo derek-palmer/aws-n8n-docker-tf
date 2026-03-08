@@ -5,6 +5,11 @@ variable "instance_profile_name" {}
 variable "instance_type" { default = "t4g.micro" }
 variable "volume_size" { default = 30 }
 variable "alb_security_group_id" {}
+variable "docker_compose_version" {
+  description = "The docker-compose plugin version to install"
+  type        = string
+  default     = "v2.24.5"
+}
 
 # Use the latest Amazon Linux 2023 AMI
 data "aws_ami" "amazon_linux_2023" {
@@ -91,7 +96,7 @@ resource "aws_instance" "n8n" {
 
   # Install docker-compose plugin
   mkdir -p /usr/local/lib/docker/cli-plugins
-  curl -SL "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-aarch64" -o /usr/local/lib/docker/cli-plugins/docker-compose
+  curl -SL "https://github.com/docker/compose/releases/download/$${var.docker_compose_version}/docker-compose-linux-aarch64" -o /usr/local/lib/docker/cli-plugins/docker-compose
   chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
   
   # Prepare app directory struct

@@ -11,16 +11,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 ENV_FILE="${REPO_ROOT}/.env.local"
 
-# Colours
-RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
-# Prints an informational message in cyan.
-info()    { echo -e "${CYAN}[info]${NC}  $*"; }
-
-# Prints a success message in green.
-success() { echo -e "${GREEN}[ok]${NC}    $*"; }
-
-# Prints a warning message in yellow.
-warn()    { echo -e "${YELLOW}[warn]${NC}  $*"; }
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
 
 echo ""
 echo -e "${CYAN}============================================================${NC}"
@@ -108,6 +100,7 @@ POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
 POSTGRES_DB=${POSTGRES_DB}
 EOF
 
+chmod 600 "${ENV_FILE}"
 success "Wrote ${ENV_FILE}"
 
 echo ""

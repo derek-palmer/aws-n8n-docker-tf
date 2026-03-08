@@ -67,7 +67,7 @@ resource "aws_subnet" "public_2" {
   vpc_id     = aws_vpc.main.id
   cidr_block = var.public_subnet_2_cidr
   # Pick an AZ that is distinct from var.az
-  availability_zone       = data.aws_availability_zones.available.names[0] == var.az ? data.aws_availability_zones.available.names[1] : data.aws_availability_zones.available.names[0]
+  availability_zone       = element(tolist(setsubtract(data.aws_availability_zones.available.names, [var.az])), 0)
   map_public_ip_on_launch = true
 
   tags = {

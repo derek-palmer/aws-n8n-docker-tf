@@ -71,6 +71,23 @@ resource "aws_s3_bucket_public_access_block" "artifacts" {
   restrict_public_buckets = true
 }
 
+resource "aws_s3_bucket_lifecycle_configuration" "artifacts" {
+  bucket = aws_s3_bucket.artifacts.id
+
+  rule {
+    id     = "expire-old-artifacts"
+    status = "Enabled"
+
+    expiration {
+      days = 30
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 7
+    }
+  }
+}
+
 # --- CodePipeline IAM Role ---
 resource "aws_iam_role" "codepipeline" {
   name = "n8n-${var.env}-codepipeline-role"
@@ -119,7 +136,11 @@ resource "aws_iam_role_policy" "codepipeline" {
           "codedeploy:RegisterApplicationRevision",
           "codedeploy:GetDeploymentConfig"
         ]
-        Resource = "*"
+        Resource = [
+          "arn:aws:codedeploy:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:application:${var.codedeploy_app_name}",
+          "arn:aws:codedeploy:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:deploymentgroup:${var.codedeploy_app_name}/${var.codedeploy_group_name}",
+          "arn:aws:codedeploy:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:deploymentconfig:*"
+        ]
       },
       {
         # Allow use of the CodeStar connection to pull from GitHub

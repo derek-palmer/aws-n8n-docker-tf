@@ -21,7 +21,16 @@ OVERWRITE=false
 
 while [[ $# -gt 0 ]]; do
   case $1 in
-    --env)       ENV="$2"; shift 2 ;;
+    --env)
+      if [[ -z "${2:-}" ]]; then
+        error "--env requires a non-empty value"
+      fi
+      if ! [[ "$2" =~ ^[A-Za-z0-9._-]+$ ]]; then
+        error "Invalid environment name: '$2'. Only alphanumeric characters, dots, underscores, and dashes are allowed."
+      fi
+      ENV="$2"
+      shift 2
+      ;;
     --overwrite) OVERWRITE=true; shift ;;
     *) error "Unknown argument: $1" ;;
   esac
@@ -36,7 +45,7 @@ echo ""
 # Verify AWS access
 resolve_aws_profile
 AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-AWS_REGION=$(aws configure get region 2>/dev/null || echo "us-east-1")
+AWS_REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-$(aws configure get region 2>/dev/null || echo "us-east-1")}}"
 
 info "AWS account: ${AWS_ACCOUNT_ID} | Region: ${AWS_REGION} | Env: ${ENV}"
 echo ""
@@ -83,7 +92,14 @@ fi
 
 if [[ -z "${DEFAULT_HOST}" ]]; then
   prompt "n8n host (e.g. n8n-test.example.com):"
-  read -re -p "  > " N8N_HOST
+  while true; do
+    read -re -p "  > " N8N_HOST
+    if [[ -z "${N8N_HOST}" ]]; then
+      warn "Host cannot be blank for non-local env."
+    else
+      break
+    fi
+  done
 else
   read -re -i "${DEFAULT_HOST}" -p "  Host:     " N8N_HOST
 fi
@@ -94,7 +110,7 @@ read -re -i "5678"               -p "  Port:     " N8N_PORT
 prompt "n8n encryption key (leave blank to auto-generate):"
 read -rsp "  > " N8N_ENCRYPTION_KEY
 echo ""
-[[ -z "${N8N_ENCRYPTION_KEY}" ]] && N8N_ENCRYPTION_KEY=$(LC_ALL=C tr -dc 'a-f0-9' </dev/urandom 2>/dev/null | head -c 64) && info "Auto-generated encryption key."
+[[ -z "${N8N_ENCRYPTION_KEY}" ]] && N8N_ENCRYPTION_KEY=$(od -vN 32 -A n -t x1 /dev/urandom | tr -d ' \n') && info "Auto-generated encryption key."
 
 echo ""
 echo -e "${CYAN}--- Database Config ---${NC}"
@@ -104,7 +120,7 @@ read -re -i "n8n" -p "  Postgres database name: " PG_DB
 prompt "Postgres password (leave blank to auto-generate):"
 read -rsp "  > " PG_PASSWORD
 echo ""
-[[ -z "${PG_PASSWORD}" ]] && PG_PASSWORD=$(LC_ALL=C tr -dc 'a-f0-9' </dev/urandom 2>/dev/null | head -c 32) && info "Auto-generated Postgres password."
+[[ -z "${PG_PASSWORD}" ]] && PG_PASSWORD=$(od -vN 16 -A n -t x1 /dev/urandom | tr -d ' \n') && info "Auto-generated Postgres password."
 
 # --- Push to SSM ---
 echo ""
