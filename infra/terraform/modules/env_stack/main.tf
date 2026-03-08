@@ -22,9 +22,9 @@ module "route53" {
 }
 
 module "acm" {
-  source          = "../acm"
-  domain_name     = var.domain_name
-  subdomain       = var.subdomain
+  source      = "../acm"
+  domain_name = var.domain_name
+  subdomain   = var.subdomain
 }
 
 module "alb" {

@@ -9,52 +9,11 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
-# --- Colours (minimal, since this runs on the host) ---
-RED='\033[0;31m'; CYAN='\033[0;36m'; YELLOW='\033[1;33m'; NC='\033[0m'
-
-# Prints an error message in red to stderr and exits with status 1.
-error() { echo -e "${RED}[error]${NC} $*" >&2; exit 1; }
-
-# Prints an informational message in cyan.
-info()  { echo -e "${CYAN}[info]${NC}  $*"; }
+# --- Source common utilities ---
+source "${REPO_ROOT}/scripts/lib/common.sh"
 
 # --- Determine which profile to use ---
-if [[ -z "${AWS_PROFILE:-}" ]]; then
-  # AWS_PROFILE not exported — pick from configured profiles
-  profiles=$(aws configure list-profiles 2>/dev/null) \
-    || error "Could not list AWS profiles. Is the AWS CLI configured?"
-  [[ -z "${profiles}" ]] && error "No AWS profiles found. Configure one at ~/.aws/config"
-
-  # Build array
-  profile_array=()
-  while IFS= read -r line; do
-    [[ -n "${line}" ]] && profile_array+=("${line}")
-  done <<< "${profiles}"
-  profile_count="${#profile_array[@]}"
-
-  if [[ "${profile_count}" -eq 1 ]]; then
-    export AWS_PROFILE="${profile_array[0]}"
-    info "Auto-selected AWS profile: ${AWS_PROFILE}"
-  else
-    echo ""
-    echo -e "${CYAN}Select an AWS profile:${NC}"
-    for i in "${!profile_array[@]}"; do
-      echo "  $((i+1))) ${profile_array[$i]}"
-    done
-    echo ""
-    while true; do
-      read -rp "  Enter number [1-${profile_count}]: " choice
-      if [[ "${choice}" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= profile_count )); then
-        export AWS_PROFILE="${profile_array[$((choice-1))]}"
-        break
-      fi
-      echo -e "${YELLOW}[warn]${NC}  Invalid selection, try again."
-    done
-    info "Using AWS profile: ${AWS_PROFILE}"
-  fi
-else
-  info "Using AWS profile: ${AWS_PROFILE}"
-fi
+resolve_aws_profile
 
 # --- Resolve credentials for this profile on the host ---
 # Use --format env (with 'export') so eval both sets AND exports the vars,
@@ -79,5 +38,5 @@ exec docker run --rm -it \
   -e AWS_SESSION_TOKEN \
   -e AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-${PROFILE_REGION}}" \
   -e AWS_REGION="${AWS_REGION:-${PROFILE_REGION}}" \
-  amazon/aws-cli:latest \
+  amazon/aws-cli:2.15.0 \
   "$@"

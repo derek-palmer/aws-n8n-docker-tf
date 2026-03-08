@@ -4,7 +4,13 @@ set -euo pipefail
 # Usage: ./scripts/deploy.sh <env>
 # This script is meant to be run automatically by AWS CodeDeploy or manually via SSM Run Command on the EC2 instance.
 
-ENV=${1:-test}
+# When run by CodeDeploy, DEPLOYMENT_GROUP_NAME will be e.g. "n8n-prod"
+if [[ -n "${DEPLOYMENT_GROUP_NAME:-}" ]]; then
+  # Extract 'prod' or 'test' from 'n8n-prod'
+  ENV="${DEPLOYMENT_GROUP_NAME#n8n-}"
+else
+  ENV=${1:-test}
+fi
 APP_DIR="/opt/n8n-app"
 
 # Setup trap for cleanup on failure
@@ -42,7 +48,7 @@ bash ./scripts/fetch_ssm_env.sh "${ENV}"
 
 # 4. Pull the latest docker images from ECR
 echo "Authenticating with ECR..."
-AWS_REGION=$(aws configure get region 2>/dev/null || echo "us-east-1")
+AWS_REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-$(aws configure get region 2>/dev/null || echo "us-east-1")}}"
 AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 
 aws ecr get-login-password --region "${AWS_REGION}" | docker login --username AWS --password-stdin "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"

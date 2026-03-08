@@ -128,7 +128,7 @@ resource "aws_instance" "n8n" {
 
   # Install docker-compose plugin
   mkdir -p /usr/local/lib/docker/cli-plugins
-  curl -SL "https://github.com/docker/compose/releases/download/${var.docker_compose_version}/docker-compose-linux-aarch64" -o /usr/local/lib/docker/cli-plugins/docker-compose
+  curl --fail -SL "https://github.com/docker/compose/releases/download/${var.docker_compose_version}/docker-compose-linux-aarch64" -o /usr/local/lib/docker/cli-plugins/docker-compose
   chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
   
   # Prepare app directory struct

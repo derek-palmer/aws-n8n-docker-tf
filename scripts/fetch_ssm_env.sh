@@ -6,12 +6,13 @@ set -euo pipefail
 
 ENV=${1:-local}
 OUTPUT_FILE=".env.${ENV}"
-TMP_FILE="${OUTPUT_FILE}.tmp"
 
 echo "Fetching SSM parameters for /n8n/${ENV}/..."
 
-# Clear out any stale temp file content before starting
-> "${TMP_FILE}"
+# Create secure temporary file and ensure cleanup on exit
+umask 077
+TMP_FILE=$(mktemp)
+trap 'rm -f "${TMP_FILE}"' EXIT
 
 # Use AWS CLI to get parameters by path (recursively), decrypt them, and format as KEY=VALUE
 # Requirements: aws-cli
@@ -22,11 +23,12 @@ aws ssm get-parameters-by-path \
   --query "Parameters[*].[Name,Value]" \
   --output text | \
 while read -r name value; do
-  # Extract the last part of the parameter path, e.g., /n8n/dev/app/port -> port
-  key=$(basename "$name")
+  # Strip the common prefix /n8n/${ENV}/ and any potential leading slash
+  key=${name#/n8n/${ENV}/}
+  key=${key#/}
   
-  # Convert to uppercase and replace hyphens with underscores, e.g., port -> PORT
-  env_key=$(echo "$key" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
+  # Convert to uppercase and replace slashes and hyphens with underscores, e.g., app/port -> APP_PORT
+  env_key=$(echo "$key" | tr '[:lower:]' '[:upper:]' | tr '/-' '__')
   
   # Append to temp file
   echo "${env_key}=${value}" >> "${TMP_FILE}"
@@ -35,7 +37,6 @@ done
 if [ -s "${TMP_FILE}" ]; then
     # Sort for consistency and move to target file
     sort "${TMP_FILE}" > "${OUTPUT_FILE}"
-    rm "${TMP_FILE}"
     echo "Successfully wrote parameters to ${OUTPUT_FILE}"
     
     # Secure the file (readable only by owner)

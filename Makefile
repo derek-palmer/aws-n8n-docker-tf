@@ -27,7 +27,7 @@ LOCAL_SCRIPT_CMD = docker run --rm -it \
 	--user "$(shell id -u):$(shell id -g)" \
 	-v "$(PWD):/workspace" \
 	-w "/workspace" \
-	amazon/aws-cli:latest
+	amazon/aws-cli:2.15.0
 
 help:
 	@echo "Prerequisites: aws sso login (credentials are auto-detected)"

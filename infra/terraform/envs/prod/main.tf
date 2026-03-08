@@ -13,8 +13,11 @@ terraform {
   #     --attribute-definitions AttributeName=LockID,AttributeType=S \
   #     --key-schema AttributeName=LockID,KeyType=HASH \
   #     --billing-mode PAY_PER_REQUEST
+  # 
+  # Run `terraform init -backend-config="bucket=n8n-tf-state-YOUR_ACCOUNT_ID"`
+  # to initialize.
+  #
   # backend "s3" {
-  #   bucket         = "n8n-tf-state-${AWS_ACCOUNT_ID}"
   #   key            = "envs/prod/terraform.tfstate"
   #   region         = "us-east-1"
   #   dynamodb_table = "n8n-tf-locks"
