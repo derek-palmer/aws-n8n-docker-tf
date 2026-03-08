@@ -8,6 +8,11 @@ services:
     ports:
       - "5678:5678"
 
+    environment:
+      # Override the base webhook URL to exclude the port.
+      # The ALB terminates HTTPS on 443, so the public URL has no port.
+      - WEBHOOK_URL=${N8N_PROTOCOL:-https}://${N8N_HOST}
+
     # JSON file logging — readable by CloudWatch Agent or Fluent Bit
     logging:
       driver: "json-file"
