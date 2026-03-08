@@ -19,6 +19,11 @@ variable "artifact_kms_key_arn" {
   type        = string
 }
 
+variable "ecr_repository_arn" {
+  description = "ARN of the ECR repository to pull images from"
+  type        = string
+}
+
 data "aws_region" "current" {}
 data "aws_caller_identity" "current" {}
 
@@ -124,12 +129,14 @@ resource "aws_iam_role_policy_attachment" "cloudwatch" {
   policy_arn = aws_iam_policy.cloudwatch.arn
 }
 
-# --- CodeDeploy Artifact Access Policy ---
-# Allows the EC2 instance to read deployment artifacts from the pipeline S3
-# bucket and decrypt them with the associated KMS key.
+# --- CodeDeploy Artifact & ECR Access Policy ---
+# Allows the EC2 instance to:
+#  - Read deployment artifacts from the pipeline S3 bucket
+#  - Decrypt artifacts with the associated KMS key
+#  - Authenticate to ECR and pull docker images during deploy
 resource "aws_iam_policy" "codedeploy_artifacts" {
   name        = "n8n-${var.env}-codedeploy-artifacts-policy"
-  description = "Allow EC2 to read CodeDeploy artifacts from S3 and decrypt with KMS"
+  description = "Allow EC2 to read CodeDeploy artifacts, decrypt with KMS, and pull ECR images"
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -143,6 +150,22 @@ resource "aws_iam_policy" "codedeploy_artifacts" {
         Effect   = "Allow"
         Action   = ["kms:Decrypt", "kms:GenerateDataKey"]
         Resource = var.artifact_kms_key_arn
+      },
+      {
+        # Authenticate to ECR (required for docker login)
+        Effect   = "Allow"
+        Action   = ["ecr:GetAuthorizationToken"]
+        Resource = "*"
+      },
+      {
+        # Pull images from the project ECR repository
+        Effect = "Allow"
+        Action = [
+          "ecr:BatchGetImage",
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:BatchCheckLayerAvailability"
+        ]
+        Resource = var.ecr_repository_arn
       }
     ]
   })
