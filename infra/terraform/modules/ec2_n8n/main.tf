@@ -130,6 +130,9 @@ resource "aws_instance" "n8n" {
   mkdir -p /usr/local/lib/docker/cli-plugins
   curl --fail -SL "https://github.com/docker/compose/releases/download/${var.docker_compose_version}/docker-compose-linux-aarch64" -o /usr/local/lib/docker/cli-plugins/docker-compose
   chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+
+  # AL2023 requires ruby for the CodeDeploy Agent (installed via SSM)
+  dnf install -y ruby
   
   # Prepare app directory struct
   mkdir -p /opt/n8n-app

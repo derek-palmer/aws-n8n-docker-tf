@@ -41,6 +41,12 @@ resource "aws_iam_role_policy_attachment" "ssm_core" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
+# Allows the EC2 instance to communicate with the CodeDeploy service
+resource "aws_iam_role_policy_attachment" "codedeploy_ec2" {
+  role       = aws_iam_role.ec2_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforAWSCodeDeploy"
+}
+
 # --- Parameter Store Policy ---
 # Least privilege: only allow reading parameters for THIS specific environment.
 # Also includes kms:Decrypt so SecureString values can be decrypted.
