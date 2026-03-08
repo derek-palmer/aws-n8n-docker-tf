@@ -1,0 +1,48 @@
+version: 0.2
+
+# BuildSpec for n8n on AWS Graviton (arm64)
+# This build runs on an ARM CodeBuild image to match the Graviton EC2 target.
+# Required environment variables (injected by Terraform):
+#   ECR_REPO_URL     - the full ECR repo URL (e.g. 123456789012.dkr.ecr.us-east-1.amazonaws.com/n8n)
+#   AWS_DEFAULT_REGION
+#   AWS_ACCOUNT_ID
+#   ENV              - test | prod
+
+phases:
+  pre_build:
+    commands:
+      - echo "Logging in to Amazon ECR..."
+      - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
+      - IMAGE_TAG=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c1-7)
+      - echo "Image tag = $IMAGE_TAG"
+
+  build:
+    commands:
+      - echo "Building docker-compose images..."
+      - docker compose -f docker-compose.yml -f docker-compose.aws.yml build
+
+      - echo "Tagging image..."
+      - docker tag n8nio/n8n:latest $ECR_REPO_URL:$IMAGE_TAG
+      - docker tag n8nio/n8n:latest $ECR_REPO_URL:latest
+
+  post_build:
+    commands:
+      - echo "Pushing image to ECR..."
+      - docker push $ECR_REPO_URL:$IMAGE_TAG
+      - docker push $ECR_REPO_URL:latest
+
+      # Write image details for CodeDeploy to pick up
+      - printf '[{"name":"n8n","imageUri":"%s"}]' "$ECR_REPO_URL:$IMAGE_TAG" > imagedefinitions.json
+
+      # Inject IMAGE_TAG into the env file for deploy.sh to use on the instance
+      - echo "IMAGE_TAG=$IMAGE_TAG" >> .env.$ENV
+
+artifacts:
+  files:
+    - docker-compose.yml
+    - docker-compose.aws.yml
+    - scripts/**/*
+    - imagedefinitions.json
+    - appspec.yml
+    - .env.$ENV
+  discard-paths: no

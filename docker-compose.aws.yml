@@ -1,0 +1,25 @@
+# Production & Test Extra Configuration
+# Run via: `docker compose -f docker-compose.yml -f docker-compose.aws.yml up -d`
+
+services:
+  n8n:
+    # Bind to loopback only — the ALB forwards traffic internally over the VPC.
+    # This prevents direct public access even if a security group rule is ever misconfigured.
+    ports:
+      - "127.0.0.1:5678:5678"
+
+    # JSON file logging — readable by CloudWatch Agent or Fluent Bit
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  postgres:
+    # Postgres is NOT exposed outside the Docker network in production.
+    # It communicates with n8n entirely on the internal compose network.
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
