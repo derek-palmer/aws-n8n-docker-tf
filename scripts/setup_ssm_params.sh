@@ -42,6 +42,11 @@ info "AWS account: ${AWS_ACCOUNT_ID} | Region: ${AWS_REGION} | Env: ${ENV}"
 echo ""
 
 # --- Helper: put a single parameter ---
+# Writes a parameter to AWS Systems Manager Parameter Store.
+# Parameters:
+#   $1: The SSM parameter path (e.g., /n8n/test/app/host)
+#   $2: The value to store
+#   $3: The parameter type (default: SecureString)
 put_param() {
   local name="$1" value="$2" type="${3:-SecureString}"
 

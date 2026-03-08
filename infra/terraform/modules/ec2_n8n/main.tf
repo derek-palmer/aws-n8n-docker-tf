@@ -104,8 +104,8 @@ resource "aws_instance" "n8n" {
   EOF
 
   tags = {
-    Name        = "n8n-${var.env}-instance"
-    role        = "n8n"         # Used by CodeDeploy to identify instances
+    Name          = "n8n-${var.env}-instance"
+    role          = "n8n"            # Used by CodeDeploy to identify instances
     "Patch Group" = "n8n-${var.env}" # Connects SSM Patch Manager baseline
   }
 

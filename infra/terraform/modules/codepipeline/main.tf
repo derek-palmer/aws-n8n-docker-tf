@@ -106,7 +106,7 @@ resource "aws_iam_role_policy" "codepipeline" {
         # Allow pipeline to trigger the CodeBuild project
         Effect   = "Allow"
         Action   = ["codebuild:BatchGetBuilds", "codebuild:StartBuild"]
-        Resource = "arn:aws:codebuild:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:project/${var.codebuild_project_name}"
+        Resource = "arn:aws:codebuild:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:project/${var.codebuild_project_name}"
       },
       {
         # Allow pipeline to create CodeDeploy deployments

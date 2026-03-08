@@ -11,7 +11,11 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # --- Colours (minimal, since this runs on the host) ---
 RED='\033[0;31m'; CYAN='\033[0;36m'; YELLOW='\033[1;33m'; NC='\033[0m'
+
+# Prints an error message in red to stderr and exits with status 1.
 error() { echo -e "${RED}[error]${NC} $*" >&2; exit 1; }
+
+# Prints an informational message in cyan.
 info()  { echo -e "${CYAN}[info]${NC}  $*"; }
 
 # --- Determine which profile to use ---

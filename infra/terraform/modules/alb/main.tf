@@ -1,7 +1,6 @@
 variable "env" {}
 variable "vpc_id" {}
 variable "subnet_ids" { type = list(string) }
-variable "instance_id" {}
 variable "certificate_arn" {}
 
 # --- ALB Security Group ---
@@ -75,12 +74,7 @@ resource "aws_lb_target_group" "n8n" {
   }
 }
 
-# --- Target Attachment ---
-resource "aws_lb_target_group_attachment" "n8n" {
-  target_group_arn = aws_lb_target_group.n8n.arn
-  target_id        = var.instance_id
-  port             = 5678
-}
+
 
 # --- Listeners ---
 # HTTP to HTTPS Redirect
@@ -115,6 +109,10 @@ resource "aws_lb_listener" "https" {
 }
 
 # --- Outputs ---
+output "target_group_arn" {
+  value = aws_lb_target_group.n8n.arn
+}
+
 output "alb_dns_name" {
   value = aws_lb.main.dns_name
 }

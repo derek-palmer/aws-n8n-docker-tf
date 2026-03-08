@@ -5,10 +5,19 @@
 
 # --- Colours ---
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
+# Prints an informational message in cyan.
 info()    { echo -e "${CYAN}[info]${NC}  $*"; }
+
+# Prints a success message in green.
 success() { echo -e "${GREEN}[ok]${NC}    $*"; }
+
+# Prints a warning message in yellow.
 warn()    { echo -e "${YELLOW}[warn]${NC}  $*"; }
+
+# Prints an error message in red to stderr and exits with status 1.
 error()   { echo -e "${RED}[error]${NC} $*" >&2; exit 1; }
+
+# Prints a prompt message in yellow (used before read commands).
 prompt()  { echo -e "${YELLOW}$*${NC}"; }
 
 # --- resolve_aws_profile ---

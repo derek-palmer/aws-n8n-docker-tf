@@ -34,7 +34,7 @@ resource "aws_iam_role" "codebuild" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect = "Allow"
+        Effect    = "Allow"
         Principal = { Service = "codebuild.amazonaws.com" }
         Action    = "sts:AssumeRole"
       }
@@ -57,7 +57,7 @@ resource "aws_iam_role_policy" "codebuild" {
           "logs:CreateLogStream",
           "logs:PutLogEvents"
         ]
-        Resource = "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:/aws/codebuild/n8n-${var.env}-build*"
+        Resource = "arn:aws:logs:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:log-group:/aws/codebuild/n8n-${var.env}-build*"
       },
       {
         # Read artifacts from and write artifacts to the pipeline bucket
@@ -117,7 +117,7 @@ resource "aws_codebuild_project" "n8n" {
 
     environment_variable {
       name  = "AWS_DEFAULT_REGION"
-      value = data.aws_region.current.name
+      value = data.aws_region.current.id
     }
 
     environment_variable {

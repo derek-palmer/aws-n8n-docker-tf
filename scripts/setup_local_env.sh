@@ -13,8 +13,13 @@ ENV_FILE="${REPO_ROOT}/.env.local"
 
 # Colours
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
+# Prints an informational message in cyan.
 info()    { echo -e "${CYAN}[info]${NC}  $*"; }
+
+# Prints a success message in green.
 success() { echo -e "${GREEN}[ok]${NC}    $*"; }
+
+# Prints a warning message in yellow.
 warn()    { echo -e "${YELLOW}[warn]${NC}  $*"; }
 
 echo ""
@@ -25,7 +30,12 @@ echo ""
 echo -e "${YELLOW}(Press Enter to accept the default shown in brackets)${NC}"
 echo ""
 
-# Existing value helper — reads current value from .env.local if it exists
+# --- Helper: current ---
+# Reads the current value of a given key from .env.local.
+# Used to preserve existing secrets like the DB password across re-runs.
+# Parameters:
+#   $1: The environment variable key (e.g., POSTGRES_PASSWORD)
+#   $2: The fallback default value if the key is not found
 current() {
   local key="$1" default="$2"
   if [[ -f "${ENV_FILE}" ]]; then

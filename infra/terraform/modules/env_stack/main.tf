@@ -14,11 +14,8 @@ module "iam" {
 }
 
 module "route53" {
-  source       = "../route53"
-  domain_name  = var.domain_name
-  subdomain    = var.subdomain
-  alb_dns_name = module.alb.alb_dns_name
-  alb_zone_id  = module.alb.alb_zone_id
+  source      = "../route53"
+  domain_name = var.domain_name
 }
 
 module "acm" {
@@ -33,8 +30,20 @@ module "alb" {
   env             = var.env
   vpc_id          = module.vpc.vpc_id
   subnet_ids      = module.vpc.public_subnet_ids
-  instance_id     = module.ec2_n8n.instance_id
   certificate_arn = module.acm.certificate_arn
+}
+
+# Creates the A-record alias pointing the subdomain to the ALB
+resource "aws_route53_record" "app" {
+  zone_id = module.route53.route53_zone_id
+  name    = var.subdomain
+  type    = "A"
+
+  alias {
+    name                   = module.alb.alb_dns_name
+    zone_id                = module.alb.alb_zone_id
+    evaluate_target_health = true
+  }
 }
 
 module "ec2_n8n" {
@@ -44,6 +53,13 @@ module "ec2_n8n" {
   subnet_id             = module.vpc.public_subnet_id
   instance_profile_name = module.iam.instance_profile_name
   alb_security_group_id = module.alb.security_group_id
+}
+
+# Attaches the EC2 instance to the ALB Target Group
+resource "aws_lb_target_group_attachment" "n8n" {
+  target_group_arn = module.alb.target_group_arn
+  target_id        = module.ec2_n8n.instance_id
+  port             = 5678
 }
 
 module "ssm_automation" {

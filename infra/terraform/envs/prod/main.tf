@@ -48,6 +48,6 @@ module "stack" {
   ecr_repository_url      = var.ecr_repository_url
 }
 
-output "n8n_url"       { value = module.stack.n8n_url }
-output "instance_id"   { value = module.stack.instance_id }
+output "n8n_url" { value = module.stack.n8n_url }
+output "instance_id" { value = module.stack.instance_id }
 output "pipeline_name" { value = module.stack.pipeline_name }
