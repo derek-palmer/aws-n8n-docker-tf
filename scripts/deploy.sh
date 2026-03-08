@@ -4,10 +4,11 @@ set -euo pipefail
 # Usage: ./scripts/deploy.sh <env>
 # This script is meant to be run automatically by AWS CodeDeploy or manually via SSM Run Command on the EC2 instance.
 
-# When run by CodeDeploy, DEPLOYMENT_GROUP_NAME will be e.g. "n8n-prod"
+# When run by CodeDeploy, DEPLOYMENT_GROUP_NAME will be e.g. "n8n-prod-group"
 if [[ -n "${DEPLOYMENT_GROUP_NAME:-}" ]]; then
-  # Extract 'prod' or 'test' from 'n8n-prod'
-  ENV="${DEPLOYMENT_GROUP_NAME#n8n-}"
+  # Extract 'prod' or 'test' from 'n8n-prod-group'
+  ENV="${DEPLOYMENT_GROUP_NAME#n8n-}"  # strip "n8n-" prefix  → "prod-group"
+  ENV="${ENV%-group}"                  # strip "-group" suffix → "prod"
 else
   ENV=${1:-test}
 fi
