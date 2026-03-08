@@ -166,6 +166,7 @@ module "codebuild" {
   env                     = var.env
   github_repo             = var.github_repo
   codestar_connection_arn = var.codestar_connection_arn
+  n8n_upstream_ref        = var.n8n_upstream_ref
   ecr_repository_url      = var.ecr_repository_url
   ecr_repository_arn      = var.ecr_repository_arn
   artifact_bucket_name    = aws_s3_bucket.artifacts.id

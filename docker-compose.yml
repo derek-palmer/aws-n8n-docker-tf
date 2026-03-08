@@ -1,6 +1,6 @@
 services:
   n8n:
-    image: n8nio/n8n:latest
+    image: ${N8N_UPSTREAM_REF:-n8nio/n8n:latest}
     restart: unless-stopped
     environment:
       # General

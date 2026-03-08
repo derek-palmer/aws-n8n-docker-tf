@@ -8,6 +8,11 @@ variable "github_repo" {
   type        = string
 }
 
+variable "n8n_upstream_ref" {
+  description = "The upstream n8n docker image reference to pull (e.g. n8nio/n8n:latest or n8nio/n8n@sha256:...)"
+  type        = string
+}
+
 variable "codestar_connection_arn" {
   description = "ARN of the CodeStar Connection to GitHub"
   type        = string
@@ -150,6 +155,11 @@ resource "aws_codebuild_project" "n8n" {
     environment_variable {
       name  = "AWS_ACCOUNT_ID"
       value = data.aws_caller_identity.current.account_id
+    }
+
+    environment_variable {
+      name  = "N8N_UPSTREAM_REF"
+      value = var.n8n_upstream_ref
     }
   }
 

@@ -18,21 +18,12 @@ phases:
 
   build:
     commands:
-      - echo "Pulling latest n8n image from Docker Hub..."
-      - docker pull n8nio/n8n:latest
+      - echo "Pulling pinned n8n image: $N8N_UPSTREAM_REF"
+      - docker pull $N8N_UPSTREAM_REF
       
-      - echo "Capturing upstream digest for reproducible tagging..."
-      - UPSTREAM_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' n8nio/n8n:latest)
-      - |
-          if [ -z "$UPSTREAM_DIGEST" ]; then
-            echo "ERROR: Failed to retrieve upstream digest"
-            exit 1
-          fi
-      - echo "Pinned upstream digest = $UPSTREAM_DIGEST"
-
       - echo "Tagging image..."
-      - docker tag $UPSTREAM_DIGEST $ECR_REPO_URL:$IMAGE_TAG
-      - docker tag $UPSTREAM_DIGEST $ECR_REPO_URL:latest
+      - docker tag $N8N_UPSTREAM_REF $ECR_REPO_URL:$IMAGE_TAG
+      - docker tag $N8N_UPSTREAM_REF $ECR_REPO_URL:latest
 
   post_build:
     commands:
@@ -42,6 +33,7 @@ phases:
 
       # Inject IMAGE_TAG into the env file for deploy.sh to use on the instance
       - echo "IMAGE_TAG=$IMAGE_TAG" >> .env.$ENV
+      - echo "N8N_UPSTREAM_REF=$N8N_UPSTREAM_REF" >> .env.$ENV
 
 artifacts:
   files:
