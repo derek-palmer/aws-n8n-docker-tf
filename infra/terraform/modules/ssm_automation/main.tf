@@ -71,3 +71,23 @@ resource "aws_ssm_maintenance_window_task" "n8n_patching_task" {
 
 # Note: The EC2 instance must have the tag `Patch Group: n8n-${var.env}` to be
 # enrolled in this baseline. This is set in the ec2_n8n module.
+
+# --- CodeDeploy Agent Installation via SSM ---
+# Automatically install and update the CodeDeploy agent using SSM Distributor
+resource "aws_ssm_association" "codedeploy_agent" {
+  name             = "AWS-ConfigureAWSPackage"
+  association_name = "n8n-${var.env}-codedeploy-agent-install"
+
+  targets {
+    key    = "tag:Patch Group"
+    values = ["n8n-${var.env}"]
+  }
+
+  parameters = {
+    action = "Install"
+    name   = "AWSCodeDeployAgent"
+  }
+
+  # Ensure the agent is installed on boot and kept up to date
+  schedule_expression = "rate(1 day)"
+}
