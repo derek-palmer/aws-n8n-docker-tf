@@ -24,9 +24,9 @@ resource "aws_iam_role_policy_attachment" "dlm_lifecycle_policy" {
 
 # --- DLM Policy ---
 # Ensures the EC2 instance (and its attached volumes containing Postgres data)
-# are automatically backed up daily and retained for 14 days.
+# are automatically backed up every 4 hours and retained for 30 days.
 resource "aws_dlm_lifecycle_policy" "n8n_backup" {
-  description        = "Daily backup for n8n ${var.env} EC2 instance"
+  description        = "Backs up every 4 hours for n8n ${var.env} EC2 instance, retained 30 days"
   execution_role_arn = aws_iam_role.dlm_lifecycle_role.arn
   state              = "ENABLED"
 
@@ -34,16 +34,17 @@ resource "aws_dlm_lifecycle_policy" "n8n_backup" {
     resource_types = ["INSTANCE"]
 
     schedule {
-      name = "Daily Snapshots 14 days retention"
+      name = "4-Hour Snapshots 30 days retention"
 
       create_rule {
-        interval      = 24
+        interval      = 4
         interval_unit = "HOURS"
-        times         = ["07:00"] # 7 AM UTC / 2 AM EST
+        times         = ["03:00"] # First run at 3 AM UTC, then every 4 hrs
       }
 
       retain_rule {
-        count = 14
+        # 6 snapshots per day * 30 days = 180 snapshots
+        count = 180
       }
 
       tags_to_add = {
