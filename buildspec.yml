@@ -16,11 +16,33 @@ phases:
       
       - echo "Retrieving Docker Hub credentials from SSM..."
       - |
-        if DOCKERHUB_CREDS=$(aws ssm get-parameter --name "$DOCKERHUB_CREDENTIALS_PATH" --with-decryption --query "Parameter.Value" --output text 2>/dev/null); then
-          echo "Logging in to Docker Hub..."
-          echo "$DOCKERHUB_CREDS" | jq -r .token | docker login -u "$(echo "$DOCKERHUB_CREDS" | jq -r .username)" --password-stdin
+        DOCKERHUB_SSM_STDERR_FILE=$(mktemp)
+        if DOCKERHUB_CREDS=$(aws ssm get-parameter --name "$DOCKERHUB_CREDENTIALS_PATH" --with-decryption --query "Parameter.Value" --output text 2>"$DOCKERHUB_SSM_STDERR_FILE"); then
+          DOCKERHUB_SSM_STATUS=0
         else
+          DOCKERHUB_SSM_STATUS=$?
+        fi
+        DOCKERHUB_SSM_STDERR=$(cat "$DOCKERHUB_SSM_STDERR_FILE")
+        rm -f "$DOCKERHUB_SSM_STDERR_FILE"
+
+        if [ "$DOCKERHUB_SSM_STATUS" -eq 0 ]; then
+          if ! DOCKERHUB_AUTH_LINES=$(printf '%s' "$DOCKERHUB_CREDS" | jq -er '.username as $username | .token as $token | if ($username | type) == "string" and ($username | length) > 0 and ($token | type) == "string" and ($token | length) > 0 then $username, $token else error("expected non-empty .username and .token strings") end'); then
+            echo "ERROR: Invalid Docker Hub credentials JSON at $DOCKERHUB_CREDENTIALS_PATH. Expected non-empty .username and .token strings."
+            exit 1
+          fi
+          DOCKERHUB_USERNAME=$(printf '%s\n' "$DOCKERHUB_AUTH_LINES" | sed -n '1p')
+          DOCKERHUB_TOKEN=$(printf '%s\n' "$DOCKERHUB_AUTH_LINES" | sed -n '2p')
+
+          echo "Logging in to Docker Hub..."
+          printf '%s' "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+        elif printf '%s' "$DOCKERHUB_SSM_STDERR" | grep -q "ParameterNotFound"; then
           echo "No Docker Hub credentials found at $DOCKERHUB_CREDENTIALS_PATH. Proceeding without authentication (may hit rate limits)."
+        else
+          echo "ERROR: Failed to fetch Docker Hub credentials from $DOCKERHUB_CREDENTIALS_PATH."
+          if [ -n "$DOCKERHUB_SSM_STDERR" ]; then
+            echo "$DOCKERHUB_SSM_STDERR"
+          fi
+          exit 1
         fi
 
       - IMAGE_TAG=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c1-7)
