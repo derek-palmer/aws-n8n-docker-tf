@@ -163,6 +163,7 @@ Local tools required to run the bootstrap script and Makefile:
   - [Terraform 1.14.x](https://developer.hashicorp.com/terraform/downloads)  
   - [AWS CLI v2](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) (v2 required for SSO support)
   - [Docker](https://docs.docker.com/engine/install/) + docker-compose
+  - `jq` (for securely handling JSON configuration)
 
 - IAM permissions to manage VPC, EC2, ALB, ACM, Route 53, SSM, IAM, CodeBuild, CodeDeploy, CodePipeline.
 

@@ -13,6 +13,16 @@ phases:
     commands:
       - echo "Logging in to Amazon ECR..."
       - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
+      
+      - echo "Retrieving Docker Hub credentials from SSM..."
+      - |
+        if DOCKERHUB_CREDS=$(aws ssm get-parameter --name "$DOCKERHUB_CREDENTIALS_PATH" --with-decryption --query "Parameter.Value" --output text 2>/dev/null); then
+          echo "Logging in to Docker Hub..."
+          echo "$DOCKERHUB_CREDS" | jq -r .token | docker login -u "$(echo "$DOCKERHUB_CREDS" | jq -r .username)" --password-stdin
+        else
+          echo "No Docker Hub credentials found at $DOCKERHUB_CREDENTIALS_PATH. Proceeding without authentication (may hit rate limits)."
+        fi
+
       - IMAGE_TAG=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c1-7)
       - echo "Image tag = $IMAGE_TAG"
 

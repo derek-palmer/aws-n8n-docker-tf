@@ -113,6 +113,12 @@ resource "aws_iam_role_policy" "codebuild" {
         Effect   = "Allow"
         Action   = ["codestar-connections:UseConnection"]
         Resource = var.codestar_connection_arn
+      },
+      {
+        # Read environment variables and Docker Hub credentials from SSM
+        Effect   = "Allow"
+        Action   = ["ssm:GetParameters", "ssm:GetParameter"]
+        Resource = "arn:aws:ssm:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:parameter/n8n/${var.env}/*"
       }
     ]
   })
@@ -160,6 +166,11 @@ resource "aws_codebuild_project" "n8n" {
     environment_variable {
       name  = "N8N_UPSTREAM_REF"
       value = var.n8n_upstream_ref
+    }
+
+    environment_variable {
+      name  = "DOCKERHUB_CREDENTIALS_PATH"
+      value = "/n8n/${var.env}/DOCKERHUB_CREDENTIALS"
     }
   }
 
