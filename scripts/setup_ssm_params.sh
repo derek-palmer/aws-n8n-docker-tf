@@ -122,6 +122,27 @@ read -rsp "  > " PG_PASSWORD
 echo ""
 [[ -z "${PG_PASSWORD}" ]] && PG_PASSWORD=$(od -vN 16 -A n -t x1 /dev/urandom | tr -d ' \n') && info "Auto-generated Postgres password."
 
+echo ""
+echo -e "${CYAN}--- External Services ---${NC}"
+echo -e "${YELLOW}(Optional - helps avoid pull rate limits during CodeBuild runs)${NC}"
+echo ""
+
+prompt "Docker Hub Username (e.g. your-docker-id):"
+read -rp "  > " DOCKERHUB_USERNAME
+
+prompt "Docker Hub Access Token (Create one at https://app.docker.com/settings/personal-access-tokens):"
+read -rsp "  > " DOCKERHUB_TOKEN
+echo ""
+
+# Format as JSON for a single SSM parameter
+DOCKERHUB_CREDENTIALS="{}"
+if [[ -n "${DOCKERHUB_USERNAME}" && -n "${DOCKERHUB_TOKEN}" ]]; then
+  if ! command -v jq &>/dev/null; then
+    error "jq is required to securely format Docker Hub credentials. Please install jq."
+  fi
+  DOCKERHUB_CREDENTIALS=$(jq -n -c --arg username "${DOCKERHUB_USERNAME}" --arg token "${DOCKERHUB_TOKEN}" '{username: $username, token: $token}')
+fi
+
 # --- Push to SSM ---
 echo ""
 info "Writing parameters to /n8n/${ENV}/..."
@@ -134,6 +155,10 @@ put_param "/n8n/${ENV}/N8N_PORT"           "${N8N_PORT}"           "String"
 put_param "/n8n/${ENV}/POSTGRES_USER"      "${PG_USER}"            "SecureString"
 put_param "/n8n/${ENV}/POSTGRES_PASSWORD"  "${PG_PASSWORD}"        "SecureString"
 put_param "/n8n/${ENV}/POSTGRES_DB"        "${PG_DB}"              "String"
+
+if [[ "${DOCKERHUB_CREDENTIALS}" != "{}" ]]; then
+  put_param "/n8n/${ENV}/DOCKERHUB_CREDENTIALS" "${DOCKERHUB_CREDENTIALS}" "SecureString"
+fi
 
 echo ""
 echo -e "${GREEN}============================================================${NC}"
