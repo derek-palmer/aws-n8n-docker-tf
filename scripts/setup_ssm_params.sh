@@ -76,6 +76,18 @@ put_param() {
   fi
 }
 
+json_escape() {
+  local value="$1"
+  value=${value//\\/\\\\}
+  value=${value//\"/\\\"}
+  value=${value//$'\n'/\\n}
+  value=${value//$'\r'/\\r}
+  value=${value//$'\t'/\\t}
+  value=${value//$'\f'/\\f}
+  value=${value//$'\b'/\\b}
+  printf '%s' "${value}"
+}
+
 # --- Prompt for values ---
 echo -e "${CYAN}--- Application Config ---${NC}"
 echo -e "${YELLOW}(Press Enter to accept the default shown)${NC}"
@@ -137,10 +149,9 @@ echo ""
 # Format as JSON for a single SSM parameter
 DOCKERHUB_CREDENTIALS="{}"
 if [[ -n "${DOCKERHUB_USERNAME}" && -n "${DOCKERHUB_TOKEN}" ]]; then
-  if ! command -v jq &>/dev/null; then
-    error "jq is required to securely format Docker Hub credentials. Please install jq."
-  fi
-  DOCKERHUB_CREDENTIALS=$(jq -n -c --arg username "${DOCKERHUB_USERNAME}" --arg token "${DOCKERHUB_TOKEN}" '{username: $username, token: $token}')
+  DOCKERHUB_CREDENTIALS=$(printf '{"username":"%s","token":"%s"}' \
+    "$(json_escape "${DOCKERHUB_USERNAME}")" \
+    "$(json_escape "${DOCKERHUB_TOKEN}")")
 fi
 
 # --- Push to SSM ---

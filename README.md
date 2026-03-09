@@ -2,13 +2,13 @@
 
 A production‑shaped, low‑cost, **n8n on AWS** stack using modern AWS and Terraform best practices:
 
-- [Terraform 1.14.x](https://developer.hashicorp.com/terraform/downloads) + [AWS provider 6.x](https://registry.terraform.io/providers/hashicorp/aws/latest/docs) for IaC.
+- [Terraform 1.7.x](https://developer.hashicorp.com/terraform/downloads) + [AWS provider 6.x](https://registry.terraform.io/providers/hashicorp/aws/latest/docs) for IaC.
 - Single‑AZ [VPC](https://docs.aws.amazon.com/vpc/latest/userguide/what-is-amazon-vpc.html), [ALB](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/introduction.html) + [ACM](https://docs.aws.amazon.com/acm/latest/userguide/acm-overview.html) + [Route 53](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/Welcome.html), [EC2](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/concepts.html) + [Docker](https://docs.docker.com/).
 - [AWS Systems Manager](https://docs.aws.amazon.com/systems-manager/latest/userguide/what-is-systems-manager.html):
   - [Parameter Store](https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-parameter-store.html) for per‑environment config/secrets.
   - [Session Manager](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager.html) for SSH‑free EC2 access.
   - [Patch Manager](https://docs.aws.amazon.com/systems-manager/latest/userguide/patch-manager.html) / [State Manager](https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-state.html) for automated patching and drift control.
-- [CodePipeline](https://docs.aws.amazon.com/codepipeline/latest/userguide/welcome.html) + [CodeBuild](https://docs.aws.amazon.com/codebuild/latest/userguide/welcome.html) + [CodeDeploy](https://docs.aws.amazon.com/codedeploy/latest/userguide/welcome.html) CI/CD wiring (skeleton).
+- [CodePipeline](https://docs.aws.amazon.com/codepipeline/latest/userguide/welcome.html) + [CodeBuild](https://docs.aws.amazon.com/codebuild/latest/userguide/welcome.html) + [CodeDeploy](https://docs.aws.amazon.com/codedeploy/latest/userguide/welcome.html) CI/CD wiring for both app delivery and Terraform delivery.
 
 It is designed as a **template** and a solid starting point for real deployments.
 
@@ -45,6 +45,7 @@ It is designed as a **template** and a solid starting point for real deployments
   - CodeBuild project to build and push Docker images to ECR.  
   - CodeDeploy deployment group targeting the n8n EC2 instance.  
   - CodePipeline wiring Source → Build → Deploy stages.  
+  - Dedicated Terraform CodePipeline wiring Source → Validate/Plan → Apply stages.
 
 ---
 
@@ -58,6 +59,9 @@ n8n-aws-infra-template/
   docker-compose.yml
   docker-compose.local.yml
   docker-compose.aws.yml
+  buildspec.yml
+  terraform-buildspec-plan.yml
+  terraform-buildspec-apply.yml
 
   scripts/
     fetch_ssm_env.sh       # Pulls /n8n/<env>/... params into .env.<env>
@@ -76,19 +80,18 @@ n8n-aws-infra-template/
         codebuild/
         codedeploy/
         codepipeline/
+        terraform_pipeline/
         ssm_automation/
 
       envs/
         test/
-          backend.tf
           main.tf
+          terraform.tfvars
           variables.tf
-          outputs.tf
         prod/
-          backend.tf
           main.tf
+          terraform.tfvars
           variables.tf
-          outputs.tf
 ```
 
 You extend the modules as your needs grow.
@@ -135,8 +138,7 @@ make bootstrap env=test
 2. **Create** an S3 bucket + DynamoDB table for Terraform remote state (versioned, encrypted).
 3. **Create** an ECR repository for the n8n Docker image (scan-on-push enabled).
 4. **Create** all required SSM Parameter Store entries — auto-generates the n8n encryption key and Postgres password for you, prompts only for your domain.
-5. **Enable** the S3 backend block in `infra/terraform/envs/<env>/main.tf`.
-6. **Write** a complete `terraform.tfvars` for the environment.
+5. **Write** a complete `terraform.tfvars` for the environment.
 
 > [!IMPORTANT]
 > One step cannot be automated via CLI: the **GitHub CodeStar Connection**. The script will pause and give you the direct console link. Takes ~60 seconds to complete in your browser.
@@ -148,6 +150,8 @@ make tf-init env=test
 make tf-plan env=test
 make tf-apply env=test ARGS=-auto-approve
 ```
+
+`make tf-init` injects the remote backend settings automatically, so the Terraform source stays portable and the CI pipeline can initialize the same backend from GitHub source alone.
 
 ---
 
@@ -163,7 +167,6 @@ Local tools required to run the bootstrap script and Makefile:
   - [Terraform 1.14.x](https://developer.hashicorp.com/terraform/downloads)  
   - [AWS CLI v2](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) (v2 required for SSO support)
   - [Docker](https://docs.docker.com/engine/install/) + docker-compose
-  - `jq` (for securely handling JSON configuration)
 
 - IAM permissions to manage VPC, EC2, ALB, ACM, Route 53, SSM, IAM, CodeBuild, CodeDeploy, CodePipeline.
 
@@ -241,7 +244,7 @@ make tf-plan env=test
 make tf-apply env=test ARGS=-auto-approve
 ```
 
-Repeat with `env=prod` when ready. Terraform will create networking, ALB+ACM, Route 53 records, EC2, IAM, SSM, and the full CI/CD pipeline.
+Repeat with `env=prod` when ready. Terraform will create networking, ALB+ACM, Route 53 records, EC2, IAM, SSM, the application delivery pipeline, and the Terraform delivery pipeline.
 
 To update SSM parameters at any time without re-running the full bootstrap:
 
@@ -263,18 +266,14 @@ aws ssm start-session --target <instance-id>
 
 ---
 
-## CI/CD (skeleton)
+## CI/CD
 
-The template includes modules and scripts for:
+The template includes two delivery paths:
 
-- **CodeBuild**: Build and push Docker images to ECR (you add the buildspec).  
-- **CodeDeploy**: Deployment group for EC2 instance (tagged `role=n8n`), running `scripts/deploy.sh` to restart Docker Compose.  
-- **CodePipeline**: Source → Build → Deploy stages wired together (you configure repo, branches, and ECR).  
+- **Application pipeline**: CodePipeline Source → Build → Deploy, using [`buildspec.yml`](buildspec.yml) and CodeDeploy to publish the n8n image and roll it out to EC2.
+- **Terraform pipeline**: CodePipeline Source → Validate/Plan → Apply, using [`terraform-buildspec-plan.yml`](terraform-buildspec-plan.yml) and [`terraform-buildspec-apply.yml`](terraform-buildspec-apply.yml) to validate Terraform, create a saved plan artifact, and apply that exact plan only if validation succeeds.
 
-You provide:
-- GitHub/CodeCommit repo details.
-- ECR repo name.
-- Your `buildspec.yml` and CodeDeploy `appspec.yml` if you want fully automated deployments.
+The Terraform pipeline gets environment inputs from the deployed CodeBuild project configuration rather than ignored local `terraform.tfvars` files. That means repository changes to Terraform code flow through automatically, while changes to env-specific variable values still need to be reflected in the stack inputs that create the pipeline.
 
 ---
 
@@ -289,4 +288,4 @@ This template is intentionally opinionated to show strong defaults:
   - SSM/logs permissions are limited to what Session Manager and CloudWatch need.
 - **No inbound SSH**: Session Manager only.
 - **Automated patching**: SSM Patch Manager keeps OS patched.
-- **Modern Terraform**: 1.14.x and AWS provider 6.x pinned.
+- **Modern Terraform**: 1.7.x and AWS provider 6.x pinned.

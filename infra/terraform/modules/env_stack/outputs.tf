@@ -14,3 +14,13 @@ output "pipeline_name" {
   description = "Name of the CodePipeline for this environment"
   value       = module.codepipeline.pipeline_name
 }
+
+output "application_pipeline_name" {
+  description = "Name of the application delivery pipeline for this environment"
+  value       = module.codepipeline.pipeline_name
+}
+
+output "terraform_pipeline_name" {
+  description = "Name of the Terraform delivery pipeline for this environment"
+  value       = module.terraform_pipeline.pipeline_name
+}

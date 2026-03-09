@@ -131,21 +131,18 @@ info "Step 4/4 — Deleting Terraform state backend (S3 + DynamoDB)..."
 if aws s3api head-bucket --bucket "${STATE_BUCKET}" &>/dev/null; then
   # Empty all objects and object versions via aws s3api to guarantee deletion
   info "Clearing versioned objects from S3 bucket ${STATE_BUCKET}..."
-  versions=$(aws s3api list-object-versions --bucket "${STATE_BUCKET}" --output=json 2>/dev/null || echo '{"Versions":[],"DeleteMarkers":[]}')
-  if [[ -n "${versions}" && "${versions}" != '{"Versions":[],"DeleteMarkers":[]}' ]]; then
-    # We construct the payload, ignoring empty arrays
-    delete_json='{"Objects": []}'
-    while IFS= read -r key && IFS= read -r versionId; do
-        if [[ -n "${key}" && -n "${versionId}" && "${versionId}" != "null" ]]; then
-            # Append object to JSON array
-            delete_json=$(echo "${delete_json}" | jq ".Objects += [{\"Key\": \"${key}\", \"VersionId\": \"${versionId}\"}]")
-        fi
-    done < <(echo "${versions}" | jq -r '(.Versions[]? | .Key, .VersionId), (.DeleteMarkers[]? | .Key, .VersionId)')
-
-    # Run the bulk delete if Objects array is not empty
-    if [[ $(echo "${delete_json}" | jq '.Objects | length') -gt 0 ]]; then
-      aws s3api delete-objects --bucket "${STATE_BUCKET}" --delete "${delete_json}" >/dev/null
-    fi
+  versions=$(aws s3api list-object-versions \
+    --bucket "${STATE_BUCKET}" \
+    --query 'concat(Versions[?VersionId!=`null`].[Key,VersionId], DeleteMarkers[?VersionId!=`null`].[Key,VersionId])' \
+    --output text 2>/dev/null || true)
+  if [[ -n "${versions}" ]]; then
+    while IFS=$'\t' read -r key version_id; do
+      [[ -z "${key}" || -z "${version_id}" ]] && continue
+      aws s3api delete-object \
+        --bucket "${STATE_BUCKET}" \
+        --key "${key}" \
+        --version-id "${version_id}" >/dev/null
+    done <<< "${versions}"
   fi
   aws s3 rb "s3://${STATE_BUCKET}" --force >/dev/null
   success "Deleted S3 state bucket: ${STATE_BUCKET}"

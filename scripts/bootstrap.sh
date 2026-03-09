@@ -91,27 +91,7 @@ else
   success "Created DynamoDB lock table: ${LOCK_TABLE}"
 fi
 
-# Patch the backend config into the env main.tf
-MAIN_TF="infra/terraform/envs/${ENV}/main.tf"
-if grep -q "# backend" "${MAIN_TF}"; then
-  info "Enabling S3 backend in ${MAIN_TF}..."
-  # Use a combination of sed to uncomment the backend block and inject the variables inline
-  # We look for the marker comment "# backend \"s3\" {" and uncomment/replace the block
-  sed -i -e "/# backend \"s3\" {/!b" \
-      -e "c\\
-  backend \"s3\" {\\
-    bucket         = \"${STATE_BUCKET}\"\\
-    key            = \"envs/${ENV}/terraform.tfstate\"\\
-    region         = \"${AWS_REGION}\"\\
-    dynamodb_table = \"${LOCK_TABLE}\"\\
-    encrypt        = true\\
-  }" \
-      -e ":a" -e "n" -e "/# }/!ba" -e "d" \
-      "${MAIN_TF}"
-  success "Backend configured in ${MAIN_TF}"
-else
-  warn "Backend block already uncommented in ${MAIN_TF}, skipping."
-fi
+info "Terraform backend is configured at init time; no source files need patching."
 
 # =============================================================================
 # 3. ECR Repository

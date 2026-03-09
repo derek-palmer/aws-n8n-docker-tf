@@ -26,7 +26,7 @@ resource "aws_iam_role_policy_attachment" "dlm_lifecycle_policy" {
 # Ensures the EC2 instance (and its attached volumes containing Postgres data)
 # are automatically backed up every 4 hours and retained for 30 days.
 resource "aws_dlm_lifecycle_policy" "n8n_backup" {
-  description        = "Backs up every 4 hours for n8n ${var.env} EC2 instance, retained 30 days"
+  description        = "Backup every 4 hours for n8n ${var.env} EC2 instance retained 30 days"
   execution_role_arn = aws_iam_role.dlm_lifecycle_role.arn
   state              = "ENABLED"
 

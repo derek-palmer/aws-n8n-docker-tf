@@ -1,0 +1,46 @@
+version: 0.2
+
+phases:
+  install:
+    commands:
+      - command -v unzip >/dev/null || dnf install -y unzip
+      - curl -fsSLo /tmp/terraform.zip "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
+      - unzip -qo /tmp/terraform.zip -d /usr/local/bin
+  pre_build:
+    commands:
+      - terraform version
+      - aws --version
+      - export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+      - export TF_BACKEND_BUCKET="n8n-tf-state-${AWS_ACCOUNT_ID}"
+      - export TF_BACKEND_KEY="envs/${TF_ENV}/terraform.tfstate"
+      - export TF_CONFIG_DIR="${CODEBUILD_SRC_DIR}/${TF_WORKING_DIR}"
+      - echo "Validating and planning Terraform in ${TF_CONFIG_DIR}"
+  build:
+    commands:
+      - terraform fmt -check -recursive "${CODEBUILD_SRC_DIR}/infra/terraform"
+      - terraform -chdir="${TF_CONFIG_DIR}" init -input=false -reconfigure -backend-config="bucket=${TF_BACKEND_BUCKET}" -backend-config="key=${TF_BACKEND_KEY}" -backend-config="region=${AWS_DEFAULT_REGION}" -backend-config="dynamodb_table=n8n-tf-locks" -backend-config="encrypt=true"
+      - terraform -chdir="${TF_CONFIG_DIR}" validate -no-color
+      - |
+        set +e
+        terraform -chdir="${TF_CONFIG_DIR}" plan -input=false -lock-timeout=5m -detailed-exitcode -out=tfplan
+        plan_exit=$?
+        set -e
+
+        if [ "${plan_exit}" -eq 1 ]; then
+          echo "terraform plan failed"
+          exit 1
+        fi
+
+        if [ "${plan_exit}" -eq 0 ]; then
+          echo "Terraform plan found no changes."
+        else
+          echo "Terraform plan found infrastructure changes."
+        fi
+      - terraform -chdir="${TF_CONFIG_DIR}" show -no-color tfplan | tee terraform.plan.txt
+      - cp "${TF_CONFIG_DIR}/tfplan" terraform.tfplan
+
+artifacts:
+  files:
+    - terraform.plan.txt
+    - terraform.tfplan
+  discard-paths: yes

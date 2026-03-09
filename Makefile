@@ -5,16 +5,8 @@ SHELL := /bin/bash
 env ?= local
 
 # Containerized Terraform — no local Terraform install needed.
-# AWS SSO credentials are picked up via AWS_PROFILE + the ~/.aws mount (includes sso/cache/).
-# Usage: make tf-plan env=test   (after running your awslogin alias)
-TF_CMD = docker run --rm -i \
-	-v "$(PWD):/workspace" \
-	-w "/workspace/infra/terraform/envs/$(env)" \
-	-v "$$HOME/.aws:/root/.aws" \
-	-e AWS_PROFILE \
-	-e AWS_REGION \
-	-e AWS_DEFAULT_REGION \
-	hashicorp/terraform:1.7
+# Uses the shared AWS credential runner with a Terraform image/workdir override.
+TF_CMD = AWS_DOCKER_IMAGE=hashicorp/terraform:1.7 AWS_DOCKER_WORKDIR=/workspace/infra/terraform/envs/$(env) AWS_DOCKER_ENTRYPOINT=/bin/sh AWS_DOCKER_TTY=0 bash scripts/lib/aws_docker_run.sh
 
 # Credentials are resolved on the host (handles SSO) then injected into
 # amazon/aws-cli (bash 5, aws-cli v2, openssl) as standard env vars.
@@ -86,19 +78,19 @@ teardown:
 # --- Terraform ---
 
 tf-init:
-	$(TF_CMD) init
+	$(TF_CMD) -lc 'terraform init -reconfigure -backend-config="bucket=n8n-tf-state-$$AWS_ACCOUNT_ID" -backend-config="key=envs/$(env)/terraform.tfstate" -backend-config="region=$$AWS_REGION" -backend-config="dynamodb_table=n8n-tf-locks" -backend-config="encrypt=true"'
 
 tf-fmt:
-	$(TF_CMD) fmt -recursive /workspace
+	$(TF_CMD) -lc 'terraform fmt -recursive /workspace'
 
 tf-validate: tf-init
-	$(TF_CMD) validate
+	$(TF_CMD) -lc 'terraform validate'
 
 tf-plan: tf-validate
-	$(TF_CMD) plan
+	$(TF_CMD) -lc 'terraform plan'
 
 tf-apply: tf-validate
-	$(TF_CMD) apply $(ARGS)
+	$(TF_CMD) -lc 'terraform apply $(ARGS)'
 
 tf-destroy: tf-validate
-	$(TF_CMD) destroy $(ARGS)
+	$(TF_CMD) -lc 'terraform destroy $(ARGS)'

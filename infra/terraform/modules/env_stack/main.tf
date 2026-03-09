@@ -176,3 +176,20 @@ module "codebuild" {
   artifact_bucket_name    = aws_s3_bucket.artifacts.id
   kms_key_arn             = aws_kms_key.artifacts.arn
 }
+
+module "terraform_pipeline" {
+  source                  = "../terraform_pipeline"
+  env                     = var.env
+  aws_region              = var.aws_region
+  az                      = var.az
+  domain_name             = var.domain_name
+  subdomain               = var.subdomain
+  github_repo             = var.github_repo
+  github_branch           = var.github_branch
+  codestar_connection_arn = var.codestar_connection_arn
+  n8n_upstream_ref        = var.n8n_upstream_ref
+  ecr_repository_url      = var.ecr_repository_url
+  ecr_repository_arn      = var.ecr_repository_arn
+  artifact_bucket_name    = aws_s3_bucket.artifacts.id
+  kms_key_arn             = aws_kms_key.artifacts.arn
+}

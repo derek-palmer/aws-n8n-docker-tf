@@ -7,22 +7,8 @@ terraform {
     }
   }
 
-  # Uncomment and configure after creating your S3 state bucket:
-  #   aws s3api create-bucket --bucket n8n-tf-state-${AWS_ACCOUNT_ID} --region us-east-1
-  #   aws dynamodb create-table --table-name n8n-tf-locks \
-  #     --attribute-definitions AttributeName=LockID,AttributeType=S \
-  #     --key-schema AttributeName=LockID,KeyType=HASH \
-  #     --billing-mode PAY_PER_REQUEST
-  # 
-  # Run `terraform init -backend-config="bucket=n8n-tf-state-YOUR_ACCOUNT_ID"`
-  # to initialize.
-  #
-  # backend "s3" {
-  #   key            = "envs/test/terraform.tfstate"
-  #   region         = "us-east-1"
-  #   dynamodb_table = "n8n-tf-locks"
-  #   encrypt        = true
-  # }
+  # Backend settings are injected at init time by the Makefile and CI/CD pipeline.
+  backend "s3" {}
 }
 
 provider "aws" {
@@ -56,3 +42,5 @@ module "stack" {
 output "n8n_url" { value = module.stack.n8n_url }
 output "instance_id" { value = module.stack.instance_id }
 output "pipeline_name" { value = module.stack.pipeline_name }
+output "application_pipeline_name" { value = module.stack.application_pipeline_name }
+output "terraform_pipeline_name" { value = module.stack.terraform_pipeline_name }
