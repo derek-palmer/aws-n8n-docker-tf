@@ -129,22 +129,46 @@ fi
 info "Step 4/4 — Deleting Terraform state backend (S3 + DynamoDB)..."
 
 if aws s3api head-bucket --bucket "${STATE_BUCKET}" &>/dev/null; then
-  # Empty all objects and object versions via aws s3api to guarantee deletion
+  # Empty all objects and object versions via aws s3api to guarantee deletion.
+  # Use bulk delete-objects (batches of 1000) instead of one delete-object per version.
   info "Clearing versioned objects from S3 bucket ${STATE_BUCKET}..."
-  versions=$(aws s3api list-object-versions --bucket "${STATE_BUCKET}" --output=json 2>/dev/null || echo '{"Versions":[],"DeleteMarkers":[]}')
-  if [[ -n "${versions}" && "${versions}" != '{"Versions":[],"DeleteMarkers":[]}' ]]; then
-    # We construct the payload, ignoring empty arrays
-    delete_json='{"Objects": []}'
-    while IFS= read -r key && IFS= read -r versionId; do
-        if [[ -n "${key}" && -n "${versionId}" && "${versionId}" != "null" ]]; then
-            # Append object to JSON array
-            delete_json=$(echo "${delete_json}" | jq ".Objects += [{\"Key\": \"${key}\", \"VersionId\": \"${versionId}\"}]")
-        fi
-    done < <(echo "${versions}" | jq -r '(.Versions[]? | .Key, .VersionId), (.DeleteMarkers[]? | .Key, .VersionId)')
-
-    # Run the bulk delete if Objects array is not empty
-    if [[ $(echo "${delete_json}" | jq '.Objects | length') -gt 0 ]]; then
-      aws s3api delete-objects --bucket "${STATE_BUCKET}" --delete "${delete_json}" >/dev/null
+  versions=$(aws s3api list-object-versions \
+    --bucket "${STATE_BUCKET}" \
+    --query 'concat(Versions[?VersionId!=`null`].[Key,VersionId], DeleteMarkers[?VersionId!=`null`].[Key,VersionId])' \
+    --output text 2>/dev/null || true)
+  if [[ -n "${versions}" ]]; then
+    # Escape for JSON: backslash and double-quote (Key/VersionId can contain these).
+    json_escape() {
+      local s="$1"
+      s="${s//\\/\\\\}"
+      s="${s//\"/\\\"}"
+      printf '%s' "${s}"
+    }
+    batch_keys=()
+    batch_ids=()
+    while IFS=$'\t' read -r key version_id; do
+      [[ -z "${key:-}" || -z "${version_id:-}" ]] && continue
+      batch_keys+=("${key}")
+      batch_ids+=("${version_id}")
+      if [[ ${#batch_keys[@]} -ge 1000 ]]; then
+        objects=""
+        for i in "${!batch_keys[@]}"; do
+          [[ -n "${objects}" ]] && objects+=","
+          objects+="{\"Key\":\"$(json_escape "${batch_keys[$i]}")\",\"VersionId\":\"$(json_escape "${batch_ids[$i]}")\"}"
+        done
+        aws s3api delete-objects --bucket "${STATE_BUCKET}" --delete "{\"Objects\":[${objects}],\"Quiet\":true}" >/dev/null
+        batch_keys=()
+        batch_ids=()
+      fi
+    done <<< "${versions}"
+    # Delete any remaining batch (under 1000 items).
+    if [[ ${#batch_keys[@]} -gt 0 ]]; then
+      objects=""
+      for i in "${!batch_keys[@]}"; do
+        [[ -n "${objects}" ]] && objects+=","
+        objects+="{\"Key\":\"$(json_escape "${batch_keys[$i]}")\",\"VersionId\":\"$(json_escape "${batch_ids[$i]}")\"}"
+      done
+      aws s3api delete-objects --bucket "${STATE_BUCKET}" --delete "{\"Objects\":[${objects}],\"Quiet\":true}" >/dev/null
     fi
   fi
   aws s3 rb "s3://${STATE_BUCKET}" --force >/dev/null
