@@ -1,0 +1,32 @@
+version: 0.2
+
+phases:
+  install:
+    commands:
+      - command -v unzip >/dev/null || dnf install -y unzip
+      - curl -fsSLo /tmp/terraform.zip "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
+      # Verify zip integrity before unpacking; fail the pipeline on checksum mismatch.
+      - curl -fsSLo /tmp/terraform_SHA256SUMS "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_SHA256SUMS"
+      - |
+        EXPECTED=$(grep "terraform_${TERRAFORM_VERSION}_linux_amd64.zip" /tmp/terraform_SHA256SUMS | awk '{print $1}')
+        ACTUAL=$(openssl dgst -sha256 -hex /tmp/terraform.zip | awk '{print $2}')
+        if [ -z "$EXPECTED" ] || [ "$EXPECTED" != "$ACTUAL" ]; then
+          echo "Terraform zip checksum mismatch. Expected (from SHA256SUMS): $EXPECTED; got: $ACTUAL"
+          exit 1
+        fi
+      - unzip -qo /tmp/terraform.zip -d /usr/local/bin
+  pre_build:
+    commands:
+      - terraform version
+      - aws --version
+      - export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+      - export TF_BACKEND_BUCKET="n8n-tf-state-${AWS_ACCOUNT_ID}"
+      - export TF_BACKEND_KEY="envs/${TF_ENV}/terraform.tfstate"
+      - export TF_CONFIG_DIR="${CODEBUILD_SRC_DIR}/${TF_WORKING_DIR}"
+      - export TF_PLAN_FILE="${CODEBUILD_SRC_DIR_tfplan_output}/terraform.tfplan"
+      - test -f "${TF_PLAN_FILE}"
+      - echo "Applying Terraform plan for ${TF_ENV}"
+  build:
+    commands:
+      - terraform -chdir="${TF_CONFIG_DIR}" init -input=false -reconfigure -backend-config="bucket=${TF_BACKEND_BUCKET}" -backend-config="key=${TF_BACKEND_KEY}" -backend-config="region=${AWS_DEFAULT_REGION}" -backend-config="dynamodb_table=n8n-tf-locks" -backend-config="encrypt=true"
+      - terraform -chdir="${TF_CONFIG_DIR}" apply -input=false -auto-approve "${TF_PLAN_FILE}"
