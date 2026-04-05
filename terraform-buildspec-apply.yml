@@ -3,10 +3,15 @@ version: 0.2
 phases:
   install:
     commands:
+      - : "${TERRAFORM_VERSION:?TERRAFORM_VERSION must be set to a pinned Terraform release}"
       - command -v unzip >/dev/null || dnf install -y unzip
+      - command -v gpg >/dev/null || dnf install -y gnupg2
       - curl -fsSLo /tmp/terraform.zip "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
-      # Verify zip integrity before unpacking; fail the pipeline on checksum mismatch.
       - curl -fsSLo /tmp/terraform_SHA256SUMS "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_SHA256SUMS"
+      - curl -fsSLo /tmp/terraform_SHA256SUMS.sig "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_SHA256SUMS.sig"
+      - curl -fsSLo /tmp/hashicorp.asc "https://www.hashicorp.com/.well-known/pgp-key.txt"
+      - gpg --batch --import /tmp/hashicorp.asc
+      - gpg --batch --verify /tmp/terraform_SHA256SUMS.sig /tmp/terraform_SHA256SUMS
       - |
         EXPECTED=$(grep "terraform_${TERRAFORM_VERSION}_linux_amd64.zip" /tmp/terraform_SHA256SUMS | awk '{print $1}')
         ACTUAL=$(openssl dgst -sha256 -hex /tmp/terraform.zip | awk '{print $2}')
@@ -19,14 +24,34 @@ phases:
     commands:
       - terraform version
       - aws --version
-      - export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-      - export TF_BACKEND_BUCKET="n8n-tf-state-${AWS_ACCOUNT_ID}"
-      - export TF_BACKEND_KEY="envs/${TF_ENV}/terraform.tfstate"
-      - export TF_CONFIG_DIR="${CODEBUILD_SRC_DIR}/${TF_WORKING_DIR}"
-      - export TF_PLAN_FILE="${CODEBUILD_SRC_DIR_tfplan_output}/terraform.tfplan"
-      - test -f "${TF_PLAN_FILE}"
+      - export AWS_ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+      - |
+        export TF_BACKEND_BUCKET="n8n-tf-state-${AWS_ACCOUNT_ID}"
+        export TF_BACKEND_KEY="envs/${TF_ENV}/terraform.tfstate"
+        export TF_CONFIG_DIR="${CODEBUILD_SRC_DIR}/${TF_WORKING_DIR}"
+        export TF_PLAN_ARTIFACT_DIR="${CODEBUILD_SRC_DIR_tfplan_output:-}"
+        export TF_PLAN_FILE="${TF_PLAN_ARTIFACT_DIR}/terraform.tfplan"
+        export TF_LOCK_TIMEOUT="${TF_LOCK_TIMEOUT:-120s}"
+
+        for required_var in TF_CONFIG_DIR TF_BACKEND_BUCKET TF_BACKEND_KEY TF_PLAN_ARTIFACT_DIR TF_PLAN_FILE TF_LOCK_TIMEOUT; do
+          if [ -z "${!required_var:-}" ]; then
+            echo "Required environment variable ${required_var} is empty."
+            exit 1
+          fi
+        done
+
+        if [ ! -d "${TF_CONFIG_DIR}" ]; then
+          echo "Terraform configuration directory does not exist: ${TF_CONFIG_DIR}"
+          exit 1
+        fi
+
+        if [ ! -f "${TF_PLAN_FILE}" ]; then
+          echo "Terraform plan file does not exist: ${TF_PLAN_FILE}"
+          exit 1
+        fi
+
       - echo "Applying Terraform plan for ${TF_ENV}"
   build:
     commands:
-      - terraform -chdir="${TF_CONFIG_DIR}" init -input=false -reconfigure -backend-config="bucket=${TF_BACKEND_BUCKET}" -backend-config="key=${TF_BACKEND_KEY}" -backend-config="region=${AWS_DEFAULT_REGION}" -backend-config="dynamodb_table=n8n-tf-locks" -backend-config="encrypt=true"
-      - terraform -chdir="${TF_CONFIG_DIR}" apply -input=false -auto-approve "${TF_PLAN_FILE}"
+      - terraform -chdir="${TF_CONFIG_DIR}" init -input=false -reconfigure -lock-timeout="${TF_LOCK_TIMEOUT}" -backend-config="bucket=${TF_BACKEND_BUCKET}" -backend-config="key=${TF_BACKEND_KEY}" -backend-config="region=${AWS_DEFAULT_REGION}" -backend-config="dynamodb_table=n8n-tf-locks" -backend-config="encrypt=true"
+      - terraform -chdir="${TF_CONFIG_DIR}" apply -input=false -lock-timeout="${TF_LOCK_TIMEOUT}" -auto-approve "${TF_PLAN_FILE}"

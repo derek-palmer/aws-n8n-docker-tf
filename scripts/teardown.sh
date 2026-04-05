@@ -137,12 +137,38 @@ if aws s3api head-bucket --bucket "${STATE_BUCKET}" &>/dev/null; then
     --query 'concat(Versions[?VersionId!=`null`].[Key,VersionId], DeleteMarkers[?VersionId!=`null`].[Key,VersionId])' \
     --output text 2>/dev/null || true)
   if [[ -n "${versions}" ]]; then
-    # Escape for JSON: backslash and double-quote (Key/VersionId can contain these).
+    # Encode arbitrary strings as quoted JSON without assuming jq is installed.
     json_escape() {
-      local s="$1"
-      s="${s//\\/\\\\}"
-      s="${s//\"/\\\"}"
-      printf '%s' "${s}"
+      local input="$1"
+      local output='"'
+      local ch
+      local code
+      local i
+
+      for ((i = 0; i < ${#input}; i++)); do
+        ch="${input:i:1}"
+        case "${ch}" in
+          '\\') output+='\\\\' ;;
+          '"') output+='\\"' ;;
+          $'\n') output+='\n' ;;
+          $'\r') output+='\r' ;;
+          $'\t') output+='\t' ;;
+          $'\b') output+='\b' ;;
+          $'\f') output+='\f' ;;
+          *)
+            LC_CTYPE=C printf -v code '%d' "'${ch}"
+            if ((code < 32)); then
+              printf -v ch '\\u%04x' "${code}"
+              output+="${ch}"
+            else
+              output+="${ch}"
+            fi
+            ;;
+        esac
+      done
+
+      output+='"'
+      printf '%s' "${output}"
     }
     batch_keys=()
     batch_ids=()
@@ -154,7 +180,7 @@ if aws s3api head-bucket --bucket "${STATE_BUCKET}" &>/dev/null; then
         objects=""
         for i in "${!batch_keys[@]}"; do
           [[ -n "${objects}" ]] && objects+=","
-          objects+="{\"Key\":\"$(json_escape "${batch_keys[$i]}")\",\"VersionId\":\"$(json_escape "${batch_ids[$i]}")\"}"
+          objects+="{\"Key\":$(json_escape "${batch_keys[$i]}"),\"VersionId\":$(json_escape "${batch_ids[$i]}")}"
         done
         aws s3api delete-objects --bucket "${STATE_BUCKET}" --delete "{\"Objects\":[${objects}],\"Quiet\":true}" >/dev/null
         batch_keys=()
@@ -166,7 +192,7 @@ if aws s3api head-bucket --bucket "${STATE_BUCKET}" &>/dev/null; then
       objects=""
       for i in "${!batch_keys[@]}"; do
         [[ -n "${objects}" ]] && objects+=","
-        objects+="{\"Key\":\"$(json_escape "${batch_keys[$i]}")\",\"VersionId\":\"$(json_escape "${batch_ids[$i]}")\"}"
+        objects+="{\"Key\":$(json_escape "${batch_keys[$i]}"),\"VersionId\":$(json_escape "${batch_ids[$i]}")}"
       done
       aws s3api delete-objects --bucket "${STATE_BUCKET}" --delete "{\"Objects\":[${objects}],\"Quiet\":true}" >/dev/null
     fi
