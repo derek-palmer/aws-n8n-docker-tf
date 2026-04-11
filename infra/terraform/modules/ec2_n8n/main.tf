@@ -40,7 +40,7 @@ variable "enable_backups" {
   default     = true
 }
 variable "backup_interval_hours" {
-  description = "Interval in hours between EBS snapshots"
+  description = "Snapshot interval in hours when backups are enabled"
   type        = number
   default     = 24
 

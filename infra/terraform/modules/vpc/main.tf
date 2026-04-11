@@ -15,6 +15,11 @@ variable "public_subnet_cidr" {
   default     = "10.0.1.0/24"
 }
 
+variable "public_subnet_2_cidr" {
+  description = "CIDR block for the second public subnet reserved for future expansion"
+  type        = string
+  default     = "10.0.2.0/24"
+}
 variable "az" {
   description = "Availability zone"
   type        = string

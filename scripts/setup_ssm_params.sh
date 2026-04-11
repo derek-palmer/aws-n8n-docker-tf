@@ -5,7 +5,7 @@
 # Safe to re-run — skips params that already exist unless --overwrite is passed.
 #
 # Usage:
-#   bash scripts/setup_ssm_params.sh --env test
+#   bash scripts/setup_ssm_params.sh --env prod
 #   bash scripts/setup_ssm_params.sh --env prod --overwrite
 # =============================================================================
 
