@@ -1,19 +1,36 @@
-# Production & Test Extra Configuration
+# AWS Host Configuration
 # Run via: `docker compose -f docker-compose.yml -f docker-compose.aws.yml up -d`
 
 services:
   n8n:
-    # Bind to all interfaces so the ALB can reach port 5678 over the VPC.
-    # The EC2 security group restricts inbound 5678 to ALB traffic only.
-    ports:
-      - "5678:5678"
-
     environment:
       # Override the base webhook URL to exclude the port.
-      # The ALB terminates HTTPS on 443, so the public URL has no port.
+      # Caddy terminates HTTPS on 443, so the public URL has no port.
       - WEBHOOK_URL=${N8N_PROTOCOL:-https}://${N8N_HOST}
 
     # JSON file logging — readable by CloudWatch Agent or Fluent Bit
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  caddy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    depends_on:
+      n8n:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - N8N_HOST=${N8N_HOST}
+      - TLS_CONTACT_EMAIL=${TLS_CONTACT_EMAIL}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
     logging:
       driver: "json-file"
       options:
@@ -28,3 +45,7 @@ services:
       options:
         max-size: "10m"
         max-file: "5"
+
+volumes:
+  caddy_data:
+  caddy_config:

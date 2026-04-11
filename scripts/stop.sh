@@ -5,7 +5,7 @@ set -euo pipefail
 # This script gracefully stops the running Docker compose stack
 # It is executed by the ApplicationStop hook during AWS CodeDeploy
 
-ENV=${1:-test}
+ENV=${1:-prod}
 APP_DIR="/opt/n8n-app"
 
 echo "Stopping n8n in ${ENV} environment..."

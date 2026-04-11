@@ -1,0 +1,8 @@
+{
+	email {$TLS_CONTACT_EMAIL}
+}
+
+{$N8N_HOST} {
+	encode gzip zstd
+	reverse_proxy n8n:5678
+}

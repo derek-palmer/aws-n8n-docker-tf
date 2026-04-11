@@ -8,6 +8,10 @@ variable "az" { type = string }
 
 variable "domain_name" { type = string }
 variable "subdomain" { type = string }
+variable "instance_ami_id" {
+  type    = string
+  default = null
+}
 
 variable "github_repo" { type = string }
 variable "github_branch" {

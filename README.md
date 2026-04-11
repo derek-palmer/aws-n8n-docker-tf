@@ -1,9 +1,9 @@
 # n8n AWS Infra Template
 
-A production‑shaped, low‑cost, **n8n on AWS** stack using modern AWS and Terraform best practices:
+A low-cost, **n8n on AWS** stack using modern AWS and Terraform best practices:
 
 - [Terraform 1.14.x](https://developer.hashicorp.com/terraform/downloads) + [AWS provider 6.x](https://registry.terraform.io/providers/hashicorp/aws/latest/docs) for IaC.
-- Single‑AZ [VPC](https://docs.aws.amazon.com/vpc/latest/userguide/what-is-amazon-vpc.html), [ALB](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/introduction.html) + [ACM](https://docs.aws.amazon.com/acm/latest/userguide/acm-overview.html) + [Route 53](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/Welcome.html), [EC2](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/concepts.html) + [Docker](https://docs.docker.com/).
+- Single‑AZ [VPC](https://docs.aws.amazon.com/vpc/latest/userguide/what-is-amazon-vpc.html), [Route 53](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/Welcome.html) + [Elastic IP](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/elastic-ip-addresses-eip.html), [EC2](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/concepts.html) + [Docker](https://docs.docker.com/) + [Caddy](https://caddyserver.com/).
 - [AWS Systems Manager](https://docs.aws.amazon.com/systems-manager/latest/userguide/what-is-systems-manager.html):
   - [Parameter Store](https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-parameter-store.html) for per‑environment config/secrets.
   - [Session Manager](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager.html) for SSH‑free EC2 access.
@@ -21,13 +21,13 @@ It is designed as a **template** and a solid starting point for real deployments
 
 - **Networking and ingress**
   - Single‑AZ VPC and public subnet.
-  - ALB (HTTPS) with an ACM certificate.
-  - Route 53 DNS routing:
-    - `n8n-test.<domain>` → test ALB.
-    - `n8n.<domain>` → prod ALB.  
+  - Production ingress is `Route 53 -> Elastic IP -> Caddy -> n8n`.
+  - Public HTTPS stays on the custom production domain without exposing n8n on port `5678`.
+  - The active deployment path is one always-on production host; version validation happens locally before prod deploys.
 
 - **Compute**
   - EC2 instance running Docker and `docker-compose` stack (n8n + Postgres).  
+  - Caddy runs on the host as the public reverse proxy and manages TLS directly on the instance.
   - No SSH exposure. Administration is handled via AWS SSM Session Manager.
 
 - **Config / secrets (per env)**
@@ -58,6 +58,7 @@ n8n-aws-infra-template/
   docker-compose.yml
   docker-compose.local.yml
   docker-compose.aws.yml
+  Caddyfile
 
   scripts/
     fetch_ssm_env.sh       # Pulls /n8n/<env>/... params into .env.<env>
@@ -68,8 +69,6 @@ n8n-aws-infra-template/
       modules/
         vpc/
         ec2_n8n/
-        alb/
-        acm/
         route53/
         ssm_params/
         iam/
@@ -80,6 +79,7 @@ n8n-aws-infra-template/
 
       envs/
         test/
+          # historical reference only
           backend.tf
           main.tf
           variables.tf
@@ -123,11 +123,11 @@ export AWS_PROFILE=<your-profile>
 
 ### Bootstrap
 
-After cloning this template, run `make bootstrap` once per environment. It handles every one-time AWS setup step automatically:
+After cloning this template, run `make bootstrap env=prod` once. It handles every one-time AWS setup step automatically:
 
 ```bash
 awslogin
-make bootstrap env=test
+make bootstrap env=prod
 ```
 
 `make bootstrap` will:
@@ -141,12 +141,12 @@ make bootstrap env=test
 > [!IMPORTANT]
 > One step cannot be automated via CLI: the **GitHub CodeStar Connection**. The script will pause and give you the direct console link. Takes ~60 seconds to complete in your browser.
 
-After bootstrap, deploy with:
+After bootstrap, deploy production with:
 
 ```bash
-make tf-init env=test
-make tf-plan env=test
-make tf-apply env=test ARGS=-auto-approve
+make tf-init env=prod
+make tf-plan env=prod
+make tf-apply env=prod ARGS=-auto-approve
 ```
 
 ---
@@ -165,14 +165,14 @@ Local tools required to run the bootstrap script and Makefile:
   - [Docker](https://docs.docker.com/engine/install/) + docker-compose
   - `jq` (for securely handling JSON configuration)
 
-- IAM permissions to manage VPC, EC2, ALB, ACM, Route 53, SSM, IAM, CodeBuild, CodeDeploy, CodePipeline.
+- IAM permissions to manage VPC, EC2, Elastic IPs, Route 53, SSM, IAM, CodeBuild, CodeDeploy, CodePipeline.
 
 ---
 
 ## Config: SSM Parameter Store hierarchy
 
-Use AWS SSM Parameter Store per env. 
-For each env (`local`, `test`, `prod`), create parameters like:
+Use AWS SSM Parameter Store per env.
+For `local`, create parameters like:
 
 ```text
 /n8n/local/N8N_ENCRYPTION_KEY   (SecureString)
@@ -186,6 +186,12 @@ For each env (`local`, `test`, `prod`), create parameters like:
 
 Repeat the pattern for `test` and `prod` (with appropriate values — `https`, real domain, etc.).
 The leaf segment of each path becomes the env var name injected into the container.
+
+For production, also create:
+
+```text
+/n8n/prod/TLS_CONTACT_EMAIL    (String)   # email used by Caddy for ACME registration
+```
 
 ---
 
@@ -213,7 +219,13 @@ make setup-ssm env=local   # just SSM params
 make up-local              # just start the stack
 ```
 
-This runs `scripts/fetch_ssm_env.sh local` to pull config from SSM, then starts `docker compose` with the local overrides.
+This assumes `.env.local` already exists from `make setup-local`, then starts `docker compose` with the local overrides.
+
+To validate an n8n upgrade locally before touching production:
+
+```bash
+make up-local-version N8N_UPSTREAM_REF=n8nio/n8n:<candidate-version>
+```
 
 To tear down:
 
@@ -225,28 +237,30 @@ make down-local
 
 ## Terraform environments
 
-`make bootstrap env=<env>` handles all setup automatically. To deploy manually or understand what's happening under the hood:
+`make bootstrap env=prod` handles the active setup automatically. To deploy manually or understand what's happening under the hood:
 
 ```bash
-# 1. Bootstrap once per env (creates state bucket, ECR, SSM params, writes tfvars)
-make bootstrap env=test
+# 1. Bootstrap once (creates state bucket, ECR, SSM params, writes tfvars)
+make bootstrap env=prod
 
 # 2. Initialize the Terraform workspace
-make tf-init env=test
+make tf-init env=prod
 
 # 3. Review the plan
-make tf-plan env=test
+make tf-plan env=prod
 
 # 4. Apply
-make tf-apply env=test ARGS=-auto-approve
+make tf-apply env=prod ARGS=-auto-approve
 ```
 
-Repeat with `env=prod` when ready. Terraform will create networking, ALB+ACM, Route 53 records, EC2, IAM, SSM, and the full CI/CD pipeline.
+Terraform will create networking, the Elastic IP-backed production DNS record, EC2, IAM, SSM, and the full CI/CD pipeline.
+
+The `test` Terraform environment remains in the repo only as historical reference. It is not part of the active documented deployment path.
 
 To update SSM parameters at any time without re-running the full bootstrap:
 
 ```bash
-make setup-ssm env=test
+make setup-ssm env=prod
 ```
 
 ---

@@ -5,7 +5,7 @@
 # Safe to re-run — skips params that already exist unless --overwrite is passed.
 #
 # Usage:
-#   bash scripts/setup_ssm_params.sh --env test
+#   bash scripts/setup_ssm_params.sh --env prod
 #   bash scripts/setup_ssm_params.sh --env prod --overwrite
 # =============================================================================
 
@@ -16,7 +16,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 
 # --- Defaults ---
-ENV="test"
+ENV="prod"
 OVERWRITE=false
 
 while [[ $# -gt 0 ]]; do
@@ -91,7 +91,7 @@ else
 fi
 
 if [[ -z "${DEFAULT_HOST}" ]]; then
-  prompt "n8n host (e.g. n8n-test.example.com):"
+  prompt "n8n host (e.g. n8n.example.com):"
   while true; do
     read -re -p "  > " N8N_HOST
     if [[ -z "${N8N_HOST}" ]]; then
@@ -106,6 +106,18 @@ fi
 
 read -re -i "${DEFAULT_PROTOCOL}" -p "  Protocol: " N8N_PROTOCOL
 read -re -i "5678"               -p "  Port:     " N8N_PORT
+
+TLS_CONTACT_EMAIL=""
+if [[ "${ENV}" != "local" && "${N8N_PROTOCOL}" == "https" ]]; then
+  while true; do
+    read -re -p "  TLS contact email: " TLS_CONTACT_EMAIL
+    if [[ -z "${TLS_CONTACT_EMAIL}" ]]; then
+      warn "TLS contact email cannot be blank when HTTPS is enabled."
+    else
+      break
+    fi
+  done
+fi
 
 prompt "n8n encryption key (leave blank to auto-generate):"
 read -rsp "  > " N8N_ENCRYPTION_KEY
@@ -152,6 +164,9 @@ put_param "/n8n/${ENV}/N8N_ENCRYPTION_KEY" "${N8N_ENCRYPTION_KEY}" "SecureString
 put_param "/n8n/${ENV}/N8N_HOST"           "${N8N_HOST}"           "String"
 put_param "/n8n/${ENV}/N8N_PROTOCOL"       "${N8N_PROTOCOL}"       "String"
 put_param "/n8n/${ENV}/N8N_PORT"           "${N8N_PORT}"           "String"
+if [[ -n "${TLS_CONTACT_EMAIL}" ]]; then
+  put_param "/n8n/${ENV}/TLS_CONTACT_EMAIL" "${TLS_CONTACT_EMAIL}" "String"
+fi
 put_param "/n8n/${ENV}/POSTGRES_USER"      "${PG_USER}"            "SecureString"
 put_param "/n8n/${ENV}/POSTGRES_PASSWORD"  "${PG_PASSWORD}"        "SecureString"
 put_param "/n8n/${ENV}/POSTGRES_DB"        "${PG_DB}"              "String"

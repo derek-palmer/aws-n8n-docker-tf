@@ -10,7 +10,7 @@ if [[ -n "${DEPLOYMENT_GROUP_NAME:-}" ]]; then
   ENV="${DEPLOYMENT_GROUP_NAME#n8n-}"  # strip "n8n-" prefix  → "prod-group"
   ENV="${ENV%-group}"                  # strip "-group" suffix → "prod"
 else
-  ENV=${1:-test}
+  ENV=${1:-prod}
 fi
 APP_DIR="/opt/n8n-app"
 
@@ -24,8 +24,8 @@ mkdir -p "${APP_DIR}"
 cd "${APP_DIR}"
 
 # 1.5. Pre-flight checks
-if [[ ! -f "docker-compose.yml" || ! -f "docker-compose.aws.yml" ]]; then
-  echo "Error: Required docker-compose files are missing in ${APP_DIR}."
+if [[ ! -f "docker-compose.yml" || ! -f "docker-compose.aws.yml" || ! -f "Caddyfile" ]]; then
+  echo "Error: Required runtime files are missing in ${APP_DIR}."
   exit 1
 fi
 
@@ -46,6 +46,9 @@ fi
 # 3. Fetch latest environment variables from SSM
 echo "Fetching latest SSM configuration secrets..."
 bash ./scripts/fetch_ssm_env.sh "${ENV}"
+
+echo "Validating docker compose configuration..."
+docker compose -f docker-compose.yml -f docker-compose.aws.yml --env-file ".env.${ENV}" config >/dev/null
 
 # 4. Pull the latest docker images from ECR
 echo "Authenticating with ECR..."

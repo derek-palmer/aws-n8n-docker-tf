@@ -1,7 +1,8 @@
 # --- DLM IAM Role ---
 # Allows AWS Data Lifecycle Manager to manage EBS snapshots for our instance
 resource "aws_iam_role" "dlm_lifecycle_role" {
-  name = "n8n-${var.env}-dlm-role"
+  count = var.enable_backups ? 1 : 0
+  name  = "n8n-${var.env}-dlm-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -18,33 +19,34 @@ resource "aws_iam_role" "dlm_lifecycle_role" {
 }
 
 resource "aws_iam_role_policy_attachment" "dlm_lifecycle_policy" {
-  role       = aws_iam_role.dlm_lifecycle_role.name
+  count      = var.enable_backups ? 1 : 0
+  role       = aws_iam_role.dlm_lifecycle_role[0].name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSDataLifecycleManagerServiceRole"
 }
 
 # --- DLM Policy ---
 # Ensures the EC2 instance (and its attached volumes containing Postgres data)
-# are automatically backed up every 4 hours and retained for 30 days.
+# are automatically backed up on the configured schedule.
 resource "aws_dlm_lifecycle_policy" "n8n_backup" {
-  description        = "Backs up every 4 hours for n8n ${var.env} EC2 instance, retained 30 days"
-  execution_role_arn = aws_iam_role.dlm_lifecycle_role.arn
+  count              = var.enable_backups ? 1 : 0
+  description        = "Backs up n8n ${var.env} EC2 instance every ${var.backup_interval_hours} hours retaining ${var.backup_retention_count} snapshots"
+  execution_role_arn = aws_iam_role.dlm_lifecycle_role[0].arn
   state              = "ENABLED"
 
   policy_details {
     resource_types = ["INSTANCE"]
 
     schedule {
-      name = "4-Hour Snapshots 30 days retention"
+      name = "${var.backup_interval_hours}-Hour Snapshots ${var.backup_retention_count} retained"
 
       create_rule {
-        interval      = 4
+        interval      = var.backup_interval_hours
         interval_unit = "HOURS"
-        times         = ["03:00"] # First run at 3 AM UTC, then every 4 hrs
+        times         = ["03:00"] # First run at 3 AM UTC, then repeats on the configured interval.
       }
 
       retain_rule {
-        # 6 snapshots per day * 30 days = 180 snapshots
-        count = 180
+        count = var.backup_retention_count
       }
 
       tags_to_add = {
