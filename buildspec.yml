@@ -69,6 +69,7 @@ phases:
 
 artifacts:
   files:
+    - Caddyfile
     - docker-compose.yml
     - docker-compose.aws.yml
     - scripts/**/*
