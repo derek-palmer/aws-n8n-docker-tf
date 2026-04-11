@@ -16,7 +16,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 
 # --- Defaults ---
-ENV="prod"
+ENV=""
 OVERWRITE=false
 
 while [[ $# -gt 0 ]]; do
@@ -35,6 +35,10 @@ while [[ $# -gt 0 ]]; do
     *) error "Unknown argument: $1" ;;
   esac
 done
+
+if [[ -z "${ENV}" ]]; then
+  error "--env is required (e.g. --env test). Will not default to any environment."
+fi
 
 echo ""
 echo -e "${CYAN}============================================================${NC}"
@@ -111,8 +115,11 @@ TLS_CONTACT_EMAIL=""
 if [[ "${ENV}" != "local" && "${N8N_PROTOCOL}" == "https" ]]; then
   while true; do
     read -re -p "  TLS contact email: " TLS_CONTACT_EMAIL
-    if [[ -z "${TLS_CONTACT_EMAIL}" ]]; then
-      warn "TLS contact email cannot be blank when HTTPS is enabled."
+    # Trim leading/trailing whitespace
+    TLS_CONTACT_EMAIL="${TLS_CONTACT_EMAIL#"${TLS_CONTACT_EMAIL%%[![:space:]]*}"}"
+    TLS_CONTACT_EMAIL="${TLS_CONTACT_EMAIL%"${TLS_CONTACT_EMAIL##*[![:space:]]}"}"
+    if [[ -z "${TLS_CONTACT_EMAIL}" ]] || ! [[ "${TLS_CONTACT_EMAIL}" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]]; then
+      warn "TLS contact email cannot be blank or invalid when HTTPS is enabled."
     else
       break
     fi

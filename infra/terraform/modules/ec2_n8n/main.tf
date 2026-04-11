@@ -45,8 +45,8 @@ variable "backup_interval_hours" {
   default     = 24
 
   validation {
-    condition     = var.backup_interval_hours >= 1 && floor(var.backup_interval_hours) == var.backup_interval_hours
-    error_message = "backup_interval_hours must be a whole number greater than or equal to 1."
+    condition     = contains([1, 2, 3, 4, 6, 8, 12, 24], var.backup_interval_hours)
+    error_message = "backup_interval_hours must be one of 1, 2, 3, 4, 6, 8, 12, or 24 to match AWS DLM create_rule.interval support."
   }
 }
 variable "backup_retention_count" {
@@ -71,7 +71,7 @@ variable "instance_ami_id" {
   default     = null
 
   validation {
-    condition     = var.instance_ami_id == null || can(regex("^ami-[0-9a-z]+$", var.instance_ami_id))
+    condition     = var.instance_ami_id == null || can(regex("^ami-[0-9a-f]+$", var.instance_ami_id))
     error_message = "instance_ami_id must be null or a valid AMI ID such as ami-0123456789abcdef0."
   }
 }

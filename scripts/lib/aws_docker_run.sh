@@ -11,6 +11,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # Fixed helper image for repo AWS scripts. Keep this deterministic and simple.
 AWS_TOOLS_IMAGE="aws-n8n-tools:2.15.0-jq"
 AWS_TOOLS_DOCKERFILE="${REPO_ROOT}/docker/aws-cli-tools/Dockerfile"
+AWS_TOOLS_CONTEXT="$(dirname "${AWS_TOOLS_DOCKERFILE}")"
 
 # --- Source common utilities ---
 source "${REPO_ROOT}/scripts/lib/common.sh"
@@ -34,7 +35,7 @@ eval "${creds}"
 # Build the helper image once locally so repo scripts have jq available.
 if ! docker image inspect "${AWS_TOOLS_IMAGE}" >/dev/null 2>&1; then
   info "Building helper image ${AWS_TOOLS_IMAGE}..."
-  docker build -t "${AWS_TOOLS_IMAGE}" -f "${AWS_TOOLS_DOCKERFILE}" "${REPO_ROOT}" >/dev/null
+  docker build -t "${AWS_TOOLS_IMAGE}" -f "${AWS_TOOLS_DOCKERFILE}" "${AWS_TOOLS_CONTEXT}" >/dev/null
 fi
 
 # --- Run the container with resolved credentials ---
