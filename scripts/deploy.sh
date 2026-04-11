@@ -4,13 +4,24 @@ set -euo pipefail
 # Usage: ./scripts/deploy.sh <env>
 # This script is meant to be run automatically by AWS CodeDeploy or manually via SSM Run Command on the EC2 instance.
 
+usage() {
+  echo "Usage: ./scripts/deploy.sh <env>" >&2
+}
+
 # When run by CodeDeploy, DEPLOYMENT_GROUP_NAME will be e.g. "n8n-prod-group"
 if [[ -n "${DEPLOYMENT_GROUP_NAME:-}" ]]; then
   # Extract 'prod' or 'test' from 'n8n-prod-group'
   ENV="${DEPLOYMENT_GROUP_NAME#n8n-}"  # strip "n8n-" prefix  → "prod-group"
   ENV="${ENV%-group}"                  # strip "-group" suffix → "prod"
+elif [[ -n "${ENV:-}" ]]; then
+  echo "Using exported ENV=${ENV} for manual deployment."
+elif [[ $# -ge 1 ]]; then
+  ENV="$1"
+  echo "Using explicit environment ${ENV} for manual deployment."
 else
-  ENV=${1:-prod}
+  usage
+  echo "Error: Manual runs must pass an environment explicitly." >&2
+  exit 1
 fi
 APP_DIR="/opt/n8n-app"
 

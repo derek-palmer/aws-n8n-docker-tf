@@ -7,10 +7,7 @@
 #
 # Usage:
 #   awslogin
-#   bash scripts/bootstrap.sh
-#
-# Or with explicit env:
-#   bash scripts/bootstrap.sh --env prod
+#   bash scripts/bootstrap.sh --env <env>
 # =============================================================================
 
 set -euo pipefail
@@ -19,16 +16,35 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/common.sh
 source "${SCRIPT_DIR}/lib/common.sh"
 
-# --- Defaults ---
-ENV="prod"
+usage() {
+  cat <<'EOF'
+Usage:
+  bash scripts/bootstrap.sh --env <env>
+
+Example:
+  bash scripts/bootstrap.sh --env prod
+EOF
+}
+
+ENV=""
 
 # --- Argument parsing ---
 while [[ $# -gt 0 ]]; do
   case $1 in
-    --env) ENV="$2"; shift 2 ;;
+    --env)
+      [[ $# -ge 2 ]] || error "--env requires a value.\n$(usage)"
+      ENV="$2"
+      shift 2
+      ;;
+    --help|-h)
+      usage
+      exit 0
+      ;;
     *) error "Unknown argument: $1" ;;
   esac
 done
+
+[[ -n "${ENV}" ]] || error "Missing required --env argument.\n$(usage)"
 
 echo ""
 echo -e "${CYAN}============================================================${NC}"
@@ -151,6 +167,16 @@ source "$(dirname "$0")/setup_ssm_params.sh" --env "${ENV}"
 TFVARS="infra/terraform/envs/${ENV}/terraform.tfvars"
 info "Updating ${TFVARS} with computed values..."
 
+EXISTING_INSTANCE_AMI_ID=""
+if [[ -f "${TFVARS}" ]]; then
+  EXISTING_INSTANCE_AMI_ID=$(awk -F'"' '/^instance_ami_id[[:space:]]*=/{print $2; exit}' "${TFVARS}" || true)
+fi
+
+INSTANCE_AMI_LINE=""
+if [[ -n "${EXISTING_INSTANCE_AMI_ID}" ]]; then
+  INSTANCE_AMI_LINE="instance_ami_id = \"${EXISTING_INSTANCE_AMI_ID}\""
+fi
+
 # Prompt for GitHub details
 echo ""
 echo -e "${YELLOW}Enter your GitHub / CI details:${NC}"
@@ -181,6 +207,7 @@ az         = "${AWS_REGION}a"
 # DNS Configuration
 domain_name = "${DOMAIN_NAME}"
 subdomain   = "${SUBDOMAIN}"
+${INSTANCE_AMI_LINE}
 
 # CI/CD Configuration 
 github_repo             = "${GITHUB_REPO}"
