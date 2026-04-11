@@ -3,7 +3,7 @@ version: 0.2
 phases:
   install:
     commands:
-      - : "${TERRAFORM_VERSION:?TERRAFORM_VERSION must be set to a pinned Terraform release}"
+      - ': "${TERRAFORM_VERSION:?TERRAFORM_VERSION must be set to a pinned Terraform release}"'
       - command -v unzip >/dev/null || dnf install -y unzip
       - command -v gpg >/dev/null || dnf install -y gnupg2
       - curl -fsSLo /tmp/terraform.zip "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
@@ -32,6 +32,13 @@ phases:
       - aws --version
       - export AWS_ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
       - |
+        for source_var in TF_ENV TF_WORKING_DIR; do
+          if [ -z "${!source_var:-}" ]; then
+            echo "Required source environment variable ${source_var} is empty or unset."
+            exit 1
+          fi
+        done
+
         export TF_BACKEND_BUCKET="n8n-tf-state-${AWS_ACCOUNT_ID}"
         export TF_BACKEND_KEY="envs/${TF_ENV}/terraform.tfstate"
         export TF_CONFIG_DIR="${CODEBUILD_SRC_DIR}/${TF_WORKING_DIR}"

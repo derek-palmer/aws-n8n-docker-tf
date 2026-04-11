@@ -7,7 +7,7 @@
 #
 # Usage:
 #   awslogin
-#   bash scripts/bootstrap.sh --env <env>
+#   bash scripts/bootstrap.sh --env <prod|test>
 # =============================================================================
 
 set -euo pipefail
@@ -19,10 +19,10 @@ source "${SCRIPT_DIR}/lib/common.sh"
 usage() {
   cat <<'EOF'
 Usage:
-  bash scripts/bootstrap.sh --env <env>
+  bash scripts/bootstrap.sh --env <prod|test>
 
 Example:
-  bash scripts/bootstrap.sh --env prod
+  bash scripts/bootstrap.sh --env test
 EOF
 }
 

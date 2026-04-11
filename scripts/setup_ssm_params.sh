@@ -115,8 +115,11 @@ TLS_CONTACT_EMAIL=""
 if [[ "${ENV}" != "local" && "${N8N_PROTOCOL}" == "https" ]]; then
   while true; do
     read -re -p "  TLS contact email: " TLS_CONTACT_EMAIL
-    if [[ -z "${TLS_CONTACT_EMAIL}" ]]; then
-      warn "TLS contact email cannot be blank when HTTPS is enabled."
+    # Trim leading/trailing whitespace
+    TLS_CONTACT_EMAIL="${TLS_CONTACT_EMAIL#"${TLS_CONTACT_EMAIL%%[![:space:]]*}"}"
+    TLS_CONTACT_EMAIL="${TLS_CONTACT_EMAIL%"${TLS_CONTACT_EMAIL##*[![:space:]]}"}"
+    if [[ -z "${TLS_CONTACT_EMAIL}" ]] || ! [[ "${TLS_CONTACT_EMAIL}" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]]; then
+      warn "TLS contact email cannot be blank or invalid when HTTPS is enabled."
     else
       break
     fi

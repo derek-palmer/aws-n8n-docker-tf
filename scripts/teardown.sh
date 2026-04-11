@@ -148,8 +148,8 @@ if aws s3api head-bucket --bucket "${STATE_BUCKET}" &>/dev/null; then
       for ((i = 0; i < ${#input}; i++)); do
         ch="${input:i:1}"
         case "${ch}" in
-          '\\') output+='\\\\' ;;
-          '"') output+='\\"' ;;
+          '\\') output+=$'\\\\' ;;
+          '"') output+=$'\\"' ;;
           $'\n') output+='\n' ;;
           $'\r') output+='\r' ;;
           $'\t') output+='\t' ;;
