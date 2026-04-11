@@ -3,7 +3,7 @@
 # teardown.sh — Completely remove all AWS resources for an n8n environment
 #
 # This script destroys EVERYTHING for the given environment:
-#   1. All Terraform-managed infrastructure (EC2, ALB, VPC, CI/CD, etc.)
+#   1. All Terraform-managed infrastructure (EC2, Elastic IP, VPC, CI/CD, etc.)
 #   2. All bootstrap-managed resources (S3 state bucket, DynamoDB, ECR, SSM params)
 #
 # ⚠️  THIS IS IRREVERSIBLE. All data will be lost.

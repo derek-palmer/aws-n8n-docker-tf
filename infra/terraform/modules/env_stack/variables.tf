@@ -25,8 +25,54 @@ variable "domain_name" {
 }
 
 variable "subdomain" {
-  description = "The subdomain to route to the ALB (e.g. n8n-test or n8n)"
+  description = "The subdomain to route to the public endpoint (e.g. n8n-test or n8n)"
   type        = string
+}
+
+variable "enable_public_endpoint" {
+  description = "Whether to expose the environment publicly via Route 53 and an Elastic IP"
+  type        = bool
+  default     = true
+}
+
+variable "instance_ami_id" {
+  description = "Optional AMI ID to pin the EC2 instance to. Leave null to use the latest Amazon Linux 2023 image."
+  type        = string
+  default     = null
+}
+
+variable "enable_detailed_monitoring" {
+  description = "Whether to enable paid 1-minute EC2 detailed monitoring"
+  type        = bool
+  default     = false
+}
+
+variable "enable_backups" {
+  description = "Whether to enable automated DLM EBS snapshots for the instance"
+  type        = bool
+  default     = true
+}
+
+variable "backup_interval_hours" {
+  description = "Snapshot interval in hours when backups are enabled"
+  type        = number
+  default     = 24
+
+  validation {
+    condition     = var.backup_interval_hours >= 1 && floor(var.backup_interval_hours) == var.backup_interval_hours
+    error_message = "backup_interval_hours must be a whole number greater than or equal to 1."
+  }
+}
+
+variable "backup_retention_count" {
+  description = "How many snapshots to retain when backups are enabled"
+  type        = number
+  default     = 7
+
+  validation {
+    condition     = var.backup_retention_count >= 1 && floor(var.backup_retention_count) == var.backup_retention_count
+    error_message = "backup_retention_count must be a whole number greater than or equal to 1."
+  }
 }
 
 # --- CI/CD ---

@@ -10,7 +10,7 @@
 #   bash scripts/bootstrap.sh
 #
 # Or with explicit env:
-#   bash scripts/bootstrap.sh --env test
+#   bash scripts/bootstrap.sh --env prod
 # =============================================================================
 
 set -euo pipefail
@@ -20,7 +20,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 
 # --- Defaults ---
-ENV="test"
+ENV="prod"
 
 # --- Argument parsing ---
 while [[ $# -gt 0 ]]; do

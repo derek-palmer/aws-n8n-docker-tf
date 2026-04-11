@@ -2,7 +2,7 @@
 
 output "n8n_url" {
   description = "The public URL for this n8n environment"
-  value       = "https://${var.subdomain}.${var.domain_name}"
+  value       = var.enable_public_endpoint ? "https://${var.subdomain}.${var.domain_name}" : null
 }
 
 output "instance_id" {

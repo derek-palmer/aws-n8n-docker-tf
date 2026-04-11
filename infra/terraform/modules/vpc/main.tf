@@ -16,7 +16,7 @@ variable "public_subnet_cidr" {
 }
 
 variable "public_subnet_2_cidr" {
-  description = "CIDR block for the second public subnet (for ALB HA)"
+  description = "CIDR block for the second public subnet reserved for future expansion"
   type        = string
   default     = "10.0.2.0/24"
 }

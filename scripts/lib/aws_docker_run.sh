@@ -8,6 +8,9 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# Fixed helper image for repo AWS scripts. Keep this deterministic and simple.
+AWS_TOOLS_IMAGE="aws-n8n-tools:2.15.0-jq"
+AWS_TOOLS_DOCKERFILE="${REPO_ROOT}/docker/aws-cli-tools/Dockerfile"
 
 # --- Source common utilities ---
 source "${REPO_ROOT}/scripts/lib/common.sh"
@@ -28,6 +31,12 @@ PROFILE_REGION=$(aws configure get region --profile "${AWS_PROFILE}" 2>/dev/null
 # shellcheck disable=SC2163
 eval "${creds}"
 
+# Build the helper image once locally so repo scripts have jq available.
+if ! docker image inspect "${AWS_TOOLS_IMAGE}" >/dev/null 2>&1; then
+  info "Building helper image ${AWS_TOOLS_IMAGE}..."
+  docker build -t "${AWS_TOOLS_IMAGE}" -f "${AWS_TOOLS_DOCKERFILE}" "${REPO_ROOT}" >/dev/null
+fi
+
 # --- Run the container with resolved credentials ---
 exec docker run --rm -it \
   --entrypoint bash \
@@ -38,5 +47,5 @@ exec docker run --rm -it \
   -e AWS_SESSION_TOKEN \
   -e AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-${PROFILE_REGION}}" \
   -e AWS_REGION="${AWS_REGION:-${PROFILE_REGION}}" \
-  amazon/aws-cli:2.15.0 \
+  "${AWS_TOOLS_IMAGE}" \
   "$@"

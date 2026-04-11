@@ -24,14 +24,56 @@ variable "volume_size" {
   type        = number
   default     = 30
 }
-variable "alb_security_group_id" {
-  description = "Security group ID of the ALB to allow inbound HTTP traffic"
-  type        = string
+variable "public_web_ingress_enabled" {
+  description = "Whether to allow public HTTP and HTTPS ingress directly to the instance"
+  type        = bool
+  default     = false
+}
+variable "enable_detailed_monitoring" {
+  description = "Whether to enable EC2 detailed monitoring"
+  type        = bool
+  default     = false
+}
+variable "enable_backups" {
+  description = "Whether to create the automated DLM backup policy"
+  type        = bool
+  default     = true
+}
+variable "backup_interval_hours" {
+  description = "Snapshot interval in hours when backups are enabled"
+  type        = number
+  default     = 24
+
+  validation {
+    condition     = var.backup_interval_hours >= 1 && floor(var.backup_interval_hours) == var.backup_interval_hours
+    error_message = "backup_interval_hours must be a whole number greater than or equal to 1."
+  }
+}
+variable "backup_retention_count" {
+  description = "How many snapshots to retain when backups are enabled"
+  type        = number
+  default     = 7
+
+  validation {
+    condition     = var.backup_retention_count >= 1 && floor(var.backup_retention_count) == var.backup_retention_count
+    error_message = "backup_retention_count must be a whole number greater than or equal to 1."
+  }
 }
 variable "docker_compose_version" {
   description = "The docker-compose plugin version to install"
   type        = string
   default     = "v2.24.5"
+}
+
+variable "instance_ami_id" {
+  description = "Optional AMI ID override. Set this to pin an instance to a specific AMI instead of always using the latest Amazon Linux 2023 image."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.instance_ami_id == null || can(regex("^ami-[0-9a-z]+$", var.instance_ami_id))
+    error_message = "instance_ami_id must be null or a valid AMI ID such as ami-0123456789abcdef0."
+  }
 }
 
 # Use the latest Amazon Linux 2023 AMI
@@ -45,19 +87,15 @@ data "aws_ami" "amazon_linux_2023" {
   }
 }
 
+locals {
+  instance_ami_id = coalesce(var.instance_ami_id, data.aws_ami.amazon_linux_2023.id)
+}
+
 # --- Security Group ---
 resource "aws_security_group" "ec2_sg" {
   name        = "n8n-${var.env}-ec2-sg"
   description = "Security group for n8n EC2 instance"
   vpc_id      = var.vpc_id
-
-  # Allow inbound HTTP from ALB only
-  ingress {
-    from_port       = 5678
-    to_port         = 5678
-    protocol        = "tcp"
-    security_groups = [var.alb_security_group_id]
-  }
 
   # Allow all outbound
   # Note: Trivy flags this unrestricted egress (AWS-0104), but it is required for 
@@ -76,12 +114,32 @@ resource "aws_security_group" "ec2_sg" {
   }
 }
 
+resource "aws_vpc_security_group_ingress_rule" "public_http" {
+  count             = var.public_web_ingress_enabled ? 1 : 0
+  security_group_id = aws_security_group.ec2_sg.id
+  cidr_ipv4         = "0.0.0.0/0"
+  from_port         = 80
+  to_port           = 80
+  ip_protocol       = "tcp"
+  description       = "Allow public HTTP for Caddy ACME challenges and redirects"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "public_https" {
+  count             = var.public_web_ingress_enabled ? 1 : 0
+  security_group_id = aws_security_group.ec2_sg.id
+  cidr_ipv4         = "0.0.0.0/0"
+  from_port         = 443
+  to_port           = 443
+  ip_protocol       = "tcp"
+  description       = "Allow public HTTPS for the Caddy reverse proxy"
+}
+
 # --- EC2 Instance ---
 resource "aws_instance" "n8n" {
-  ami           = data.aws_ami.amazon_linux_2023.id
+  ami           = local.instance_ami_id
   instance_type = var.instance_type
   subnet_id     = var.subnet_id
-  monitoring    = true
+  monitoring    = var.enable_detailed_monitoring
 
   vpc_security_group_ids = [aws_security_group.ec2_sg.id]
   iam_instance_profile   = var.instance_profile_name

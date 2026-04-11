@@ -5,10 +5,12 @@ os: linux
 # This file is included in the build artifact and consumed by CodeDeploy.
 
 files:
-  # Copy compose files and scripts to the app directory on the EC2 instance
+  # Copy compose files, proxy config, and scripts to the app directory on the EC2 instance
   - source: docker-compose.yml
     destination: /opt/n8n-app
   - source: docker-compose.aws.yml
+    destination: /opt/n8n-app
+  - source: Caddyfile
     destination: /opt/n8n-app
   - source: scripts
     destination: /opt/n8n-app/scripts

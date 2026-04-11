@@ -25,48 +25,43 @@ module "route53" {
   domain_name = var.domain_name
 }
 
-module "acm" {
-  source      = "../acm"
-  domain_name = var.domain_name
-  subdomain   = var.subdomain
-}
-
-module "alb" {
-  source                = "../alb"
-  env                   = var.env
-  vpc_id                = module.vpc.vpc_id
-  subnet_ids            = module.vpc.public_subnet_ids
-  certificate_arn       = module.acm.certificate_arn
-  ec2_security_group_id = module.ec2_n8n.security_group_id
-}
-
-# Creates the A-record alias pointing the subdomain to the ALB
-resource "aws_route53_record" "app" {
-  zone_id = module.route53.route53_zone_id
-  name    = var.subdomain
-  type    = "A"
-
-  alias {
-    name                   = module.alb.alb_dns_name
-    zone_id                = module.alb.alb_zone_id
-    evaluate_target_health = true
-  }
-}
-
 module "ec2_n8n" {
   source                = "../ec2_n8n"
   env                   = var.env
   vpc_id                = module.vpc.vpc_id
   subnet_id             = module.vpc.public_subnet_ids[0]
   instance_profile_name = module.iam.instance_profile_name
-  alb_security_group_id = module.alb.security_group_id
+  instance_ami_id       = var.instance_ami_id
+
+  public_web_ingress_enabled = var.enable_public_endpoint
+  enable_detailed_monitoring = var.enable_detailed_monitoring
+  enable_backups             = var.enable_backups
+  backup_interval_hours      = var.backup_interval_hours
+  backup_retention_count     = var.backup_retention_count
 }
 
-# Attaches the EC2 instance to the ALB Target Group
-resource "aws_lb_target_group_attachment" "n8n" {
-  target_group_arn = module.alb.target_group_arn
-  target_id        = module.ec2_n8n.instance_id
-  port             = 5678
+resource "aws_eip" "app" {
+  count  = var.enable_public_endpoint ? 1 : 0
+  domain = "vpc"
+
+  tags = {
+    Name = "n8n-${var.env}-eip"
+  }
+}
+
+resource "aws_eip_association" "app" {
+  count         = var.enable_public_endpoint ? 1 : 0
+  allocation_id = aws_eip.app[0].id
+  instance_id   = module.ec2_n8n.instance_id
+}
+
+resource "aws_route53_record" "app_direct" {
+  count   = var.enable_public_endpoint ? 1 : 0
+  zone_id = module.route53.route53_zone_id
+  name    = var.subdomain
+  type    = "A"
+  ttl     = 300
+  records = [aws_eip.app[0].public_ip]
 }
 
 module "ssm_automation" {

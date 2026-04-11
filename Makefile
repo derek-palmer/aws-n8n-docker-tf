@@ -1,12 +1,12 @@
 SHELL := /bin/bash
-.PHONY: up-local down-local setup-local tf-init tf-plan tf-apply tf-destroy tf-fmt tf-validate bootstrap setup-ssm teardown help
+.PHONY: up-local up-local-version down-local setup-local tf-init tf-plan tf-apply tf-destroy tf-fmt tf-validate bootstrap setup-ssm teardown help
 
 # Default environment if not specified via `make <command> env=<env>`
 env ?= local
 
 # Containerized Terraform — no local Terraform install needed.
 # AWS SSO credentials are picked up via AWS_PROFILE + the ~/.aws mount (includes sso/cache/).
-# Usage: make tf-plan env=test   (after running your awslogin alias)
+# Usage: make tf-plan env=prod   (after running your awslogin alias)
 TF_CMD = docker run --rm -i \
 	-v "$(PWD):/workspace" \
 	-w "/workspace/infra/terraform/envs/$(env)" \
@@ -17,7 +17,7 @@ TF_CMD = docker run --rm -i \
 	hashicorp/terraform:1.7
 
 # Credentials are resolved on the host (handles SSO) then injected into
-# amazon/aws-cli (bash 5, aws-cli v2, openssl) as standard env vars.
+# the repo's AWS CLI helper image, which includes jq.
 SCRIPT_CMD = bash scripts/lib/aws_docker_run.sh
 
 # Plain Docker runner — no AWS credentials needed (used for local-only scripts).
@@ -35,13 +35,14 @@ help:
 	@echo "Local Development:"
 	@echo "  make setup-local           One-shot: setup SSM params + start local stack"
 	@echo "  make up-local              Fetch SSM params and start local docker-compose stack"
+	@echo "  make up-local-version      Run local n8n with N8N_UPSTREAM_REF=<image> for upgrade checks"
 	@echo "  make down-local            Stop local docker-compose stack"
 	@echo ""
-	@echo "AWS Environment Setup (run once per env after cloning):"
-	@echo "  make bootstrap env=<env>   Full setup (state bucket, ECR, SSM params, tfvars)"
-	@echo "  make setup-ssm env=<env>   Create/update SSM Parameter Store entries only"
+	@echo "AWS Environment Setup (active path is prod):"
+	@echo "  make bootstrap env=prod    Full setup (state bucket, ECR, SSM params, tfvars)"
+	@echo "  make setup-ssm env=prod    Create/update SSM Parameter Store entries only"
 	@echo ""
-	@echo "Terraform Infrastructure (env=test or env=prod):"
+	@echo "Terraform Infrastructure:"
 	@echo "  make tf-init env=<env>     Initialize terraform workspace"
 	@echo "  make tf-fmt env=<env>      Format HCL files"
 	@echo "  make tf-validate env=<env> Validate terraform configuration"
@@ -65,6 +66,15 @@ up-local:
 	@echo "  ✅ n8n is running → http://localhost:5678"
 	@echo ""
 
+up-local-version:
+	@if [ -z "$(N8N_UPSTREAM_REF)" ]; then echo "Set N8N_UPSTREAM_REF=<image> to test a candidate n8n version."; exit 1; fi
+	N8N_UPSTREAM_REF="$(N8N_UPSTREAM_REF)" docker compose -f docker-compose.yml -f docker-compose.local.yml --env-file .env.local pull n8n
+	N8N_UPSTREAM_REF="$(N8N_UPSTREAM_REF)" docker compose -f docker-compose.yml -f docker-compose.local.yml --env-file .env.local up -d --wait
+	@echo ""
+	@echo "  ✅ Candidate n8n is running → http://localhost:5678"
+	@echo "  ℹ️  Image under test: $(N8N_UPSTREAM_REF)"
+	@echo ""
+
 down-local:
 	docker compose -f docker-compose.yml -f docker-compose.local.yml down
 
@@ -79,7 +89,7 @@ setup-ssm:
 teardown:
 	@echo ""
 	@echo "⚠️  WARNING: make teardown will permanently destroy ALL resources for env=$(env)"
-	@echo "⚠️  This includes EC2, ALB, VPC, SSM params, ECR, and the Terraform state bucket."
+	@echo "⚠️  This includes EC2, VPC, SSM params, ECR, and the Terraform state bucket."
 	@echo ""
 	$(SCRIPT_CMD) scripts/teardown.sh --env $(env)
 

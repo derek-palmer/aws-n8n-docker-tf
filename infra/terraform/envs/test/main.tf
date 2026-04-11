@@ -37,6 +37,7 @@ provider "aws" {
   }
 }
 
+# Historical reference only. The active deployment path is prod plus local version validation.
 module "stack" {
   source = "../../modules/env_stack"
 
@@ -45,12 +46,17 @@ module "stack" {
   az                      = var.az
   domain_name             = var.domain_name
   subdomain               = var.subdomain
+  instance_ami_id         = var.instance_ami_id
   github_repo             = var.github_repo
   github_branch           = var.github_branch
   codestar_connection_arn = var.codestar_connection_arn
   n8n_upstream_ref        = var.n8n_upstream_ref
   ecr_repository_url      = var.ecr_repository_url
   ecr_repository_arn      = var.ecr_repository_arn
+  enable_public_endpoint  = false
+
+  enable_detailed_monitoring = false
+  enable_backups             = false
 }
 
 output "n8n_url" { value = module.stack.n8n_url }
