@@ -11,6 +11,12 @@ phases:
       - curl -fsSLo /tmp/terraform_SHA256SUMS.sig "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_SHA256SUMS.sig"
       - curl -fsSLo /tmp/hashicorp.asc "https://www.hashicorp.com/.well-known/pgp-key.txt"
       - gpg --batch --import /tmp/hashicorp.asc
+      - |
+        EXPECTED_FP="C874011F0AB405110D02105534365D9472D7468F"
+        if ! gpg --batch --with-colons --fingerprint "${EXPECTED_FP}" 2>/dev/null | grep -q "^fpr:::::::::${EXPECTED_FP}:"; then
+          echo "Imported PGP key does not match expected HashiCorp fingerprint ${EXPECTED_FP}"
+          exit 1
+        fi
       - gpg --batch --verify /tmp/terraform_SHA256SUMS.sig /tmp/terraform_SHA256SUMS
       - |
         EXPECTED=$(grep "terraform_${TERRAFORM_VERSION}_linux_amd64.zip" /tmp/terraform_SHA256SUMS | awk '{print $1}')

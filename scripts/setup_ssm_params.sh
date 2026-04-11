@@ -5,7 +5,7 @@
 # Safe to re-run — skips params that already exist unless --overwrite is passed.
 #
 # Usage:
-#   bash scripts/setup_ssm_params.sh --env prod
+#   bash scripts/setup_ssm_params.sh --env test
 #   bash scripts/setup_ssm_params.sh --env prod --overwrite
 # =============================================================================
 
@@ -16,7 +16,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 
 # --- Defaults ---
-ENV="prod"
+ENV=""
 OVERWRITE=false
 
 while [[ $# -gt 0 ]]; do
@@ -35,6 +35,10 @@ while [[ $# -gt 0 ]]; do
     *) error "Unknown argument: $1" ;;
   esac
 done
+
+if [[ -z "${ENV}" ]]; then
+  error "--env is required (e.g. --env test). Will not default to any environment."
+fi
 
 echo ""
 echo -e "${CYAN}============================================================${NC}"

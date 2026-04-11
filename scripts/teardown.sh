@@ -134,7 +134,7 @@ if aws s3api head-bucket --bucket "${STATE_BUCKET}" &>/dev/null; then
   info "Clearing versioned objects from S3 bucket ${STATE_BUCKET}..."
   versions=$(aws s3api list-object-versions \
     --bucket "${STATE_BUCKET}" \
-    --query 'concat(Versions[?VersionId!=`null`].[Key,VersionId], DeleteMarkers[?VersionId!=`null`].[Key,VersionId])' \
+    --query '(Versions[?VersionId!=`null`].{Key:Key,VersionId:VersionId} || `[]`) + (DeleteMarkers[?VersionId!=`null`].{Key:Key,VersionId:VersionId} || `[]`)' \
     --output text 2>/dev/null || true)
   if [[ -n "${versions}" ]]; then
     # Encode arbitrary strings as quoted JSON without assuming jq is installed.

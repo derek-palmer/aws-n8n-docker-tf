@@ -45,6 +45,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 [[ -n "${ENV}" ]] || error "Missing required --env argument.\n$(usage)"
+[[ "${ENV}" =~ ^(prod|test)$ ]] || error "Invalid --env '${ENV}'. Expected one of: prod or test.\n$(usage)"
 
 echo ""
 echo -e "${CYAN}============================================================${NC}"
@@ -169,7 +170,7 @@ info "Updating ${TFVARS} with computed values..."
 
 EXISTING_INSTANCE_AMI_ID=""
 if [[ -f "${TFVARS}" ]]; then
-  EXISTING_INSTANCE_AMI_ID=$(awk -F'"' '/^instance_ami_id[[:space:]]*=/{print $2; exit}' "${TFVARS}" || true)
+  EXISTING_INSTANCE_AMI_ID=$(awk -F'"' '/^[[:space:]]*instance_ami_id[[:space:]]*=[[:space:]]*"/{print $2; exit}' "${TFVARS}" || true)
 fi
 
 INSTANCE_AMI_LINE=""
