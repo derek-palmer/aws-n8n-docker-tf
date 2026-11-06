@@ -4,7 +4,6 @@ SHELL := /bin/bash
 # Default environment if not specified via `make <command> env=<env>`
 env ?= local
 
-# Single Terraform pin for all make targets (incl. teardown via tf-destroy).
 TF_VERSION ?= 1.7
 
 # Containerized Terraform — no local Terraform install needed.

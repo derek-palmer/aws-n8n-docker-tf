@@ -35,7 +35,7 @@ mkdir -p "${APP_DIR}"
 cd "${APP_DIR}"
 
 # 1.5. Pre-flight checks
-if [[ ! -f "docker-compose.yml" || ! -f "docker-compose.aws.yml" || ! -f "Caddyfile" || ! -f "build.env" ]]; then
+if [[ ! -f "docker-compose.yml" || ! -f "docker-compose.aws.yml" || ! -f "Caddyfile" ]]; then
   echo "Error: Required runtime files are missing in ${APP_DIR}."
   exit 1
 fi

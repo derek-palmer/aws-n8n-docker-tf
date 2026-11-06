@@ -91,87 +91,21 @@ fi
 # =============================================================================
 info "Step 2/3 — Deleting Terraform state for '${ENV}' from ${STATE_BUCKET}..."
 
-SHARED_UNUSED=false
+remaining=None
 if aws s3api head-bucket --bucket "${STATE_BUCKET}" &>/dev/null; then
-  # Use bulk delete-objects (batches of 1000) instead of one delete-object per version.
-  versions=$(aws s3api list-object-versions \
-    --bucket "${STATE_BUCKET}" \
-    --prefix "envs/${ENV}/" \
-    --query '(Versions[?VersionId!=`null`].{Key:Key,VersionId:VersionId} || `[]`) + (DeleteMarkers[?VersionId!=`null`].{Key:Key,VersionId:VersionId} || `[]`)' \
-    --output text 2>/dev/null || true)
-  if [[ -n "${versions}" ]]; then
-    # Encode arbitrary strings as quoted JSON without assuming jq is installed.
-    json_escape() {
-      local input="$1"
-      local output='"'
-      local ch
-      local code
-      local i
-
-      for ((i = 0; i < ${#input}; i++)); do
-        ch="${input:i:1}"
-        case "${ch}" in
-          '\\') output+=$'\\\\' ;;
-          '"') output+=$'\\"' ;;
-          $'\n') output+='\n' ;;
-          $'\r') output+='\r' ;;
-          $'\t') output+='\t' ;;
-          $'\b') output+='\b' ;;
-          $'\f') output+='\f' ;;
-          *)
-            LC_CTYPE=C printf -v code '%d' "'${ch}"
-            if ((code < 32)); then
-              printf -v ch '\\u%04x' "${code}"
-              output+="${ch}"
-            else
-              output+="${ch}"
-            fi
-            ;;
-        esac
-      done
-
-      output+='"'
-      printf '%s' "${output}"
-    }
-    batch_keys=()
-    batch_ids=()
-    while IFS=$'\t' read -r key version_id; do
-      [[ -z "${key:-}" || -z "${version_id:-}" ]] && continue
-      batch_keys+=("${key}")
-      batch_ids+=("${version_id}")
-      if [[ ${#batch_keys[@]} -ge 1000 ]]; then
-        objects=""
-        for i in "${!batch_keys[@]}"; do
-          [[ -n "${objects}" ]] && objects+=","
-          objects+="{\"Key\":$(json_escape "${batch_keys[$i]}"),\"VersionId\":$(json_escape "${batch_ids[$i]}")}"
-        done
-        aws s3api delete-objects --bucket "${STATE_BUCKET}" --delete "{\"Objects\":[${objects}],\"Quiet\":true}" >/dev/null
-        batch_keys=()
-        batch_ids=()
-      fi
-    done <<< "${versions}"
-    # Delete any remaining batch (under 1000 items).
-    if [[ ${#batch_keys[@]} -gt 0 ]]; then
-      objects=""
-      for i in "${!batch_keys[@]}"; do
-        [[ -n "${objects}" ]] && objects+=","
-        objects+="{\"Key\":$(json_escape "${batch_keys[$i]}"),\"VersionId\":$(json_escape "${batch_ids[$i]}")}"
-      done
-      aws s3api delete-objects --bucket "${STATE_BUCKET}" --delete "{\"Objects\":[${objects}],\"Quiet\":true}" >/dev/null
-    fi
-  fi
+  # Bulk delete-objects; the CLI query emits the payload directly. 500 per
+  # list call keeps versions + delete markers under the 1000-key limit.
+  while batch=$(aws s3api list-object-versions --bucket "${STATE_BUCKET}" --prefix "envs/${ENV}/" --max-items 500 \
+      --query '{Objects: [Versions[], DeleteMarkers[]][].{Key:Key,VersionId:VersionId}, Quiet: `true`}' --output json) \
+      && [[ "${batch}" != *'"Objects": []'* ]]; do
+    aws s3api delete-objects --bucket "${STATE_BUCKET}" --delete "${batch}" >/dev/null
+  done
   success "Deleted state for '${ENV}'."
 
   remaining=$(aws s3api list-object-versions --bucket "${STATE_BUCKET}" --max-keys 1 --no-paginate \
     --query 'Versions[0].Key || DeleteMarkers[0].Key' --output text)
-  if [[ "${remaining}" == "None" ]]; then
-    SHARED_UNUSED=true
-  else
-    warn "Bucket still holds other state (e.g. ${remaining}) — keeping shared resources."
-  fi
 else
   warn "S3 bucket '${STATE_BUCKET}' not found — skipping."
-  SHARED_UNUSED=true
 fi
 
 # =============================================================================
@@ -180,8 +114,8 @@ fi
 # =============================================================================
 info "Step 3/3 — Shared resources..."
 
-if [[ "${SHARED_UNUSED}" != true ]]; then
-  warn "Other environments still exist — skipping ECR, state bucket, and lock table."
+if [[ "${remaining}" != None ]]; then
+  warn "Bucket still holds other state (e.g. ${remaining}) — skipping ECR, state bucket, and lock table."
 else
   if aws ecr describe-repositories --repository-names "${ECR_REPO_NAME}" --region "${AWS_REGION}" &>/dev/null; then
     aws ecr delete-repository --repository-name "${ECR_REPO_NAME}" --force --region "${AWS_REGION}" >/dev/null
