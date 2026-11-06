@@ -3,6 +3,8 @@
 
 services:
   n8n:
+    # Run the image CodeBuild mirrored to ECR (values come from build.env).
+    image: ${ECR_REPO_URL:?ECR_REPO_URL missing - is build.env present?}:${IMAGE_TAG:?IMAGE_TAG missing - is build.env present?}
     environment:
       # Override the base webhook URL to exclude the port.
       # Caddy terminates HTTPS on 443, so the public URL has no port.

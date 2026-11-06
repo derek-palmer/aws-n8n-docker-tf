@@ -4,6 +4,9 @@ SHELL := /bin/bash
 # Default environment if not specified via `make <command> env=<env>`
 env ?= local
 
+# Single Terraform pin for all make targets (incl. teardown via tf-destroy).
+TF_VERSION ?= 1.7
+
 # Containerized Terraform — no local Terraform install needed.
 # AWS SSO credentials are picked up via AWS_PROFILE + the ~/.aws mount (includes sso/cache/).
 # Usage: make tf-plan env=prod   (after running your awslogin alias)
@@ -14,7 +17,7 @@ TF_CMD = docker run --rm -i \
 	-e AWS_PROFILE \
 	-e AWS_REGION \
 	-e AWS_DEFAULT_REGION \
-	hashicorp/terraform:1.7
+	hashicorp/terraform:$(TF_VERSION)
 
 # Credentials are resolved on the host (handles SSO) then injected into
 # the repo's AWS CLI helper image, which includes jq.
@@ -51,7 +54,7 @@ help:
 	@echo "  make tf-destroy env=<env>  Destroy only Terraform-managed infra"
 	@echo ""
 	@echo "⚠️  Danger Zone:"
-	@echo "  make teardown env=<env>    Destroy ALL resources including state, ECR, and SSM (irreversible)"
+	@echo "  make teardown env=<env>    Destroy env infra, SSM, and state; shared ECR/state only when last env (irreversible)"
 
 # --- Local development ---
 # No AWS credentials required for local setup.
@@ -89,14 +92,17 @@ setup-ssm:
 teardown:
 	@echo ""
 	@echo "⚠️  WARNING: make teardown will permanently destroy ALL resources for env=$(env)"
-	@echo "⚠️  This includes EC2, VPC, SSM params, ECR, and the Terraform state bucket."
+	@echo "⚠️  This includes EC2, VPC, SSM params, and this env's Terraform state."
+	@echo "⚠️  ECR, the state bucket, and the lock table go too if no other env remains."
 	@echo ""
+	$(MAKE) tf-destroy env=$(env)
 	$(SCRIPT_CMD) scripts/teardown.sh --env $(env)
 
 # --- Terraform ---
 
 tf-init:
-	$(TF_CMD) init
+	@test -f infra/terraform/envs/$(env)/backend.hcl || { echo "Missing infra/terraform/envs/$(env)/backend.hcl — run make bootstrap env=$(env)"; exit 1; }
+	$(TF_CMD) init -backend-config=backend.hcl
 
 tf-fmt:
 	$(TF_CMD) fmt -recursive /workspace

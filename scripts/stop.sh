@@ -13,7 +13,8 @@ elif [[ -n "${ENV:-}" ]]; then
 elif [[ $# -ge 1 ]]; then
   ENV="$1"
 else
-  ENV="test"
+  echo "Usage: ./scripts/stop.sh <env>" >&2
+  exit 1
 fi
 APP_DIR="/opt/n8n-app"
 
@@ -24,12 +25,11 @@ if [[ -d "${APP_DIR}" ]]; then
   
   if [[ -f "docker-compose.yml" && -f "docker-compose.aws.yml" ]]; then
     echo "Running docker compose down..."
-    # Always try to load the environment file so interpolations succeed, but ignore failures if it doesn't exist
-    if [[ -f ".env.${ENV}" ]]; then
-        docker compose -f docker-compose.yml -f docker-compose.aws.yml --env-file ".env.${ENV}" down || true
-    else
-        docker compose -f docker-compose.yml -f docker-compose.aws.yml down || true
-    fi
+    # Load whichever env files exist so interpolations succeed; ignore failures.
+    COMPOSE=(docker compose -f docker-compose.yml -f docker-compose.aws.yml)
+    [[ -f ".env.${ENV}" ]] && COMPOSE+=(--env-file ".env.${ENV}")
+    [[ -f "build.env" ]] && COMPOSE+=(--env-file build.env)
+    "${COMPOSE[@]}" down || true
     echo "Stack stopped gracefully."
   else
     echo "No compose files found. Stack may not be running. Skipping stop."

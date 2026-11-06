@@ -12,6 +12,8 @@ files:
     destination: /opt/n8n-app
   - source: Caddyfile
     destination: /opt/n8n-app
+  - source: build.env
+    destination: /opt/n8n-app
   - source: scripts
     destination: /opt/n8n-app/scripts
 

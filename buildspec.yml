@@ -63,9 +63,9 @@ phases:
       - docker push "$ECR_REPO_URL:$IMAGE_TAG"
       - docker push "$ECR_REPO_URL:latest"
 
-      # Inject IMAGE_TAG into the env file for deploy.sh to use on the instance
-      - echo "IMAGE_TAG=$IMAGE_TAG" >> .env.$ENV
-      - echo "N8N_UPSTREAM_REF=$N8N_UPSTREAM_REF" >> .env.$ENV
+      # Pin the deployed image to this build's ECR tag. Kept separate from
+      # .env.<env>, which deploy.sh regenerates from SSM on the instance.
+      - printf 'ECR_REPO_URL=%s\nIMAGE_TAG=%s\n' "$ECR_REPO_URL" "$IMAGE_TAG" > build.env
 
 artifacts:
   files:
@@ -74,5 +74,5 @@ artifacts:
     - docker-compose.aws.yml
     - scripts/**/*
     - appspec.yml
-    - .env.$ENV
+    - build.env
   discard-paths: no

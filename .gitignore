@@ -4,6 +4,8 @@
 *.tfstate
 *.tfstate.backup
 *.tfvars
+backend.hcl
+build.env
 .DS_Store
 *.log
 node_modules/
