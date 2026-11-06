@@ -58,8 +58,11 @@ fi
 echo "Fetching latest SSM configuration secrets..."
 bash ./scripts/fetch_ssm_env.sh "${ENV}"
 
+# build.env (from CodeBuild) pins the ECR image tag; .env.<env> holds SSM config.
+COMPOSE=(docker compose -f docker-compose.yml -f docker-compose.aws.yml --env-file ".env.${ENV}" --env-file build.env)
+
 echo "Validating docker compose configuration..."
-docker compose -f docker-compose.yml -f docker-compose.aws.yml --env-file ".env.${ENV}" config >/dev/null
+"${COMPOSE[@]}" config >/dev/null
 
 # 4. Pull the latest docker images from ECR
 echo "Authenticating with ECR..."
@@ -68,11 +71,11 @@ AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 
 aws ecr get-login-password --region "${AWS_REGION}" | docker login --username AWS --password-stdin "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
 
-echo "Pulling latest docker images..."
-docker compose -f docker-compose.yml -f docker-compose.aws.yml --env-file ".env.${ENV}" pull
+echo "Pulling docker images..."
+"${COMPOSE[@]}" pull
 
 # 5. Restart the docker stack
 echo "Bringing up the stack..."
-docker compose -f docker-compose.yml -f docker-compose.aws.yml --env-file ".env.${ENV}" up -d --remove-orphans
+"${COMPOSE[@]}" up -d --remove-orphans
 
 echo "Deployment complete! ✅"

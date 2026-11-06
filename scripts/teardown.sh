@@ -2,14 +2,19 @@
 # =============================================================================
 # teardown.sh — Completely remove all AWS resources for an n8n environment
 #
-# This script destroys EVERYTHING for the given environment:
-#   1. All Terraform-managed infrastructure (EC2, Elastic IP, VPC, CI/CD, etc.)
-#   2. All bootstrap-managed resources (S3 state bucket, DynamoDB, ECR, SSM params)
+# Removes the bootstrap-managed resources for the given environment:
+#   1. SSM params under /n8n/<env>/
+#   2. That env's Terraform state in the S3 state bucket
+#   3. Shared resources (ECR repo, state bucket, lock table) — only once no
+#      other environment's state remains in the bucket.
+#
+# Terraform-managed infra is destroyed first by `make teardown` (tf-destroy).
+# Run via make; running this script alone leaves that infra orphaned.
 #
 # ⚠️  THIS IS IRREVERSIBLE. All data will be lost.
 #
 # Usage:
-#   bash scripts/teardown.sh --env test
+#   make teardown env=<env>
 # =============================================================================
 
 set -euo pipefail
@@ -18,14 +23,18 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/common.sh
 source "${SCRIPT_DIR}/lib/common.sh"
 
-ENV="test"
+ENV=""
 
 while [[ $# -gt 0 ]]; do
   case $1 in
-    --env) ENV="$2"; shift 2 ;;
+    --env)
+      [[ $# -ge 2 ]] || error "--env requires a value."
+      ENV="$2"; shift 2 ;;
     *) error "Unknown argument: $1" ;;
   esac
 done
+
+[[ -n "${ENV}" ]] || error "Missing required --env argument."
 
 echo ""
 echo -e "${RED}============================================================${NC}"
@@ -50,46 +59,15 @@ AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 AWS_REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-$(aws configure get region 2>/dev/null || echo "us-east-1")}}"
 STATE_BUCKET="n8n-tf-state-${AWS_ACCOUNT_ID}"
 LOCK_TABLE="n8n-tf-locks"
+ECR_REPO_NAME="n8n" # Must match bootstrap.sh
 
 info "AWS account: ${AWS_ACCOUNT_ID} | Region: ${AWS_REGION} | Env: ${ENV}"
 echo ""
 
 # =============================================================================
-# Step 1: Terraform destroy (managed infrastructure)
+# Step 1: SSM Parameters
 # =============================================================================
-info "Step 1/4 — Destroying Terraform-managed infrastructure..."
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-TF_ENV_DIR="${REPO_ROOT}/infra/terraform/envs/${ENV}"
-
-if [[ ! -f "${TF_ENV_DIR}/terraform.tfstate" ]] && ! aws s3 ls "s3://${STATE_BUCKET}/envs/${ENV}/terraform.tfstate" &>/dev/null; then
-  warn "No Terraform state found for '${ENV}' — skipping tf destroy."
-else
-  docker run --rm -i \
-    -v "${REPO_ROOT}:/workspace" \
-    -w "/workspace/infra/terraform/envs/${ENV}" \
-    -v "${HOME}/.aws:/root/.aws:ro" \
-    -e AWS_PROFILE \
-    -e AWS_REGION \
-    -e AWS_DEFAULT_REGION \
-    hashicorp/terraform:latest init
-    
-  docker run --rm -i \
-    -v "${REPO_ROOT}:/workspace" \
-    -w "/workspace/infra/terraform/envs/${ENV}" \
-    -v "${HOME}/.aws:/root/.aws:ro" \
-    -e AWS_PROFILE \
-    -e AWS_REGION \
-    -e AWS_DEFAULT_REGION \
-    hashicorp/terraform:latest destroy -auto-approve
-  success "Terraform infrastructure destroyed."
-fi
-
-# =============================================================================
-# Step 2: SSM Parameters
-# =============================================================================
-info "Step 2/4 — Deleting SSM parameters at /n8n/${ENV}/..."
+info "Step 1/3 — Deleting SSM parameters at /n8n/${ENV}/..."
 
 PARAMS=$(aws ssm get-parameters-by-path \
   --path "/n8n/${ENV}" \
@@ -108,106 +86,55 @@ else
 fi
 
 # =============================================================================
-# Step 3: ECR Repository
+# Step 2: This env's Terraform state
+# The bucket is shared by all envs, so only envs/<env>/ is removed here.
 # =============================================================================
-info "Step 3/4 — Deleting ECR repository 'n8n-${ENV}'..."
+info "Step 2/3 — Deleting Terraform state for '${ENV}' from ${STATE_BUCKET}..."
 
-if aws ecr describe-repositories --repository-names "n8n-${ENV}" --region "${AWS_REGION}" &>/dev/null; then
-  aws ecr delete-repository \
-    --repository-name "n8n-${ENV}" \
-    --force \
-    --region "${AWS_REGION}" >/dev/null
-  success "ECR repository deleted."
-else
-  warn "ECR repository 'n8n-${ENV}' not found — skipping."
-fi
-
-# =============================================================================
-# Step 4: Terraform state backend (S3 + DynamoDB)
-# Note: Do this LAST — we need the state bucket until tf destroy is done.
-# =============================================================================
-info "Step 4/4 — Deleting Terraform state backend (S3 + DynamoDB)..."
-
+remaining=None
 if aws s3api head-bucket --bucket "${STATE_BUCKET}" &>/dev/null; then
-  # Empty all objects and object versions via aws s3api to guarantee deletion.
-  # Use bulk delete-objects (batches of 1000) instead of one delete-object per version.
-  info "Clearing versioned objects from S3 bucket ${STATE_BUCKET}..."
-  versions=$(aws s3api list-object-versions \
-    --bucket "${STATE_BUCKET}" \
-    --query '(Versions[?VersionId!=`null`].{Key:Key,VersionId:VersionId} || `[]`) + (DeleteMarkers[?VersionId!=`null`].{Key:Key,VersionId:VersionId} || `[]`)' \
-    --output text 2>/dev/null || true)
-  if [[ -n "${versions}" ]]; then
-    # Encode arbitrary strings as quoted JSON without assuming jq is installed.
-    json_escape() {
-      local input="$1"
-      local output='"'
-      local ch
-      local code
-      local i
+  # Bulk delete-objects; the CLI query emits the payload directly. 500 per
+  # list call keeps versions + delete markers under the 1000-key limit.
+  while batch=$(aws s3api list-object-versions --bucket "${STATE_BUCKET}" --prefix "envs/${ENV}/" --max-items 500 \
+      --query '{Objects: [Versions[], DeleteMarkers[]][].{Key:Key,VersionId:VersionId}, Quiet: `true`}' --output json) \
+      && [[ "${batch}" != *'"Objects": []'* ]]; do
+    aws s3api delete-objects --bucket "${STATE_BUCKET}" --delete "${batch}" >/dev/null
+  done
+  success "Deleted state for '${ENV}'."
 
-      for ((i = 0; i < ${#input}; i++)); do
-        ch="${input:i:1}"
-        case "${ch}" in
-          '\\') output+=$'\\\\' ;;
-          '"') output+=$'\\"' ;;
-          $'\n') output+='\n' ;;
-          $'\r') output+='\r' ;;
-          $'\t') output+='\t' ;;
-          $'\b') output+='\b' ;;
-          $'\f') output+='\f' ;;
-          *)
-            LC_CTYPE=C printf -v code '%d' "'${ch}"
-            if ((code < 32)); then
-              printf -v ch '\\u%04x' "${code}"
-              output+="${ch}"
-            else
-              output+="${ch}"
-            fi
-            ;;
-        esac
-      done
-
-      output+='"'
-      printf '%s' "${output}"
-    }
-    batch_keys=()
-    batch_ids=()
-    while IFS=$'\t' read -r key version_id; do
-      [[ -z "${key:-}" || -z "${version_id:-}" ]] && continue
-      batch_keys+=("${key}")
-      batch_ids+=("${version_id}")
-      if [[ ${#batch_keys[@]} -ge 1000 ]]; then
-        objects=""
-        for i in "${!batch_keys[@]}"; do
-          [[ -n "${objects}" ]] && objects+=","
-          objects+="{\"Key\":$(json_escape "${batch_keys[$i]}"),\"VersionId\":$(json_escape "${batch_ids[$i]}")}"
-        done
-        aws s3api delete-objects --bucket "${STATE_BUCKET}" --delete "{\"Objects\":[${objects}],\"Quiet\":true}" >/dev/null
-        batch_keys=()
-        batch_ids=()
-      fi
-    done <<< "${versions}"
-    # Delete any remaining batch (under 1000 items).
-    if [[ ${#batch_keys[@]} -gt 0 ]]; then
-      objects=""
-      for i in "${!batch_keys[@]}"; do
-        [[ -n "${objects}" ]] && objects+=","
-        objects+="{\"Key\":$(json_escape "${batch_keys[$i]}"),\"VersionId\":$(json_escape "${batch_ids[$i]}")}"
-      done
-      aws s3api delete-objects --bucket "${STATE_BUCKET}" --delete "{\"Objects\":[${objects}],\"Quiet\":true}" >/dev/null
-    fi
-  fi
-  aws s3 rb "s3://${STATE_BUCKET}" --force >/dev/null
-  success "Deleted S3 state bucket: ${STATE_BUCKET}"
+  remaining=$(aws s3api list-object-versions --bucket "${STATE_BUCKET}" --max-keys 1 --no-paginate \
+    --query 'Versions[0].Key || DeleteMarkers[0].Key' --output text)
 else
   warn "S3 bucket '${STATE_BUCKET}' not found — skipping."
 fi
 
-if aws dynamodb describe-table --table-name "${LOCK_TABLE}" --region "${AWS_REGION}" &>/dev/null; then
-  aws dynamodb delete-table --table-name "${LOCK_TABLE}" --region "${AWS_REGION}" >/dev/null
-  success "Deleted DynamoDB lock table: ${LOCK_TABLE}"
+# =============================================================================
+# Step 3: Shared resources (ECR, state bucket, lock table)
+# Only removed when no other environment's state remains.
+# =============================================================================
+info "Step 3/3 — Shared resources..."
+
+if [[ "${remaining}" != None ]]; then
+  warn "Bucket still holds other state (e.g. ${remaining}) — skipping ECR, state bucket, and lock table."
 else
-  warn "DynamoDB table '${LOCK_TABLE}' not found — skipping."
+  if aws ecr describe-repositories --repository-names "${ECR_REPO_NAME}" --region "${AWS_REGION}" &>/dev/null; then
+    aws ecr delete-repository --repository-name "${ECR_REPO_NAME}" --force --region "${AWS_REGION}" >/dev/null
+    success "Deleted ECR repository: ${ECR_REPO_NAME}"
+  else
+    warn "ECR repository '${ECR_REPO_NAME}' not found — skipping."
+  fi
+
+  if aws s3api head-bucket --bucket "${STATE_BUCKET}" &>/dev/null; then
+    aws s3 rb "s3://${STATE_BUCKET}" >/dev/null
+    success "Deleted S3 state bucket: ${STATE_BUCKET}"
+  fi
+
+  if aws dynamodb describe-table --table-name "${LOCK_TABLE}" --region "${AWS_REGION}" &>/dev/null; then
+    aws dynamodb delete-table --table-name "${LOCK_TABLE}" --region "${AWS_REGION}" >/dev/null
+    success "Deleted DynamoDB lock table: ${LOCK_TABLE}"
+  else
+    warn "DynamoDB table '${LOCK_TABLE}' not found — skipping."
+  fi
 fi
 
 # =============================================================================

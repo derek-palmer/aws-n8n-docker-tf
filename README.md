@@ -2,7 +2,7 @@
 
 A low-cost, **n8n on AWS** stack using modern AWS and Terraform best practices:
 
-- [Terraform 1.14.x](https://developer.hashicorp.com/terraform/downloads) + [AWS provider 6.x](https://registry.terraform.io/providers/hashicorp/aws/latest/docs) for IaC.
+- [Terraform](https://developer.hashicorp.com/terraform/downloads) (containerized, pinned in the Makefile) + [AWS provider 6.x](https://registry.terraform.io/providers/hashicorp/aws/latest/docs) for IaC.
 - Single‑AZ [VPC](https://docs.aws.amazon.com/vpc/latest/userguide/what-is-amazon-vpc.html), [Route 53](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/Welcome.html) + [Elastic IP](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/elastic-ip-addresses-eip.html), [EC2](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/concepts.html) + [Docker](https://docs.docker.com/) + [Caddy](https://caddyserver.com/).
 - [AWS Systems Manager](https://docs.aws.amazon.com/systems-manager/latest/userguide/what-is-systems-manager.html):
   - [Parameter Store](https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-parameter-store.html) for per‑environment config/secrets.
@@ -135,8 +135,18 @@ make bootstrap env=prod
 2. **Create** an S3 bucket + DynamoDB table for Terraform remote state (versioned, encrypted).
 3. **Create** an ECR repository for the n8n Docker image (scan-on-push enabled).
 4. **Create** all required SSM Parameter Store entries — auto-generates the n8n encryption key and Postgres password for you, prompts only for your domain.
-5. **Enable** the S3 backend block in `infra/terraform/envs/<env>/main.tf`.
+5. **Write** `infra/terraform/envs/<env>/backend.hcl` (gitignored) with the S3 backend settings; `make tf-init` passes it as `-backend-config`.
 6. **Write** a complete `terraform.tfvars` for the environment.
+
+> [!NOTE]
+> Already deployed before `backend.hcl` existed? Create it once with the values your state already uses, then `make tf-init` as usual:
+> ```hcl
+> bucket         = "n8n-tf-state-<account-id>"
+> key            = "envs/prod/terraform.tfstate"
+> region         = "us-east-1"
+> dynamodb_table = "n8n-tf-locks"
+> encrypt        = true
+> ```
 
 > [!IMPORTANT]
 > One step cannot be automated via CLI: the **GitHub CodeStar Connection**. The script will pause and give you the direct console link. Takes ~60 seconds to complete in your browser.
@@ -160,7 +170,7 @@ Local tools required to run the bootstrap script and Makefile:
   - Route 53 hosted zone for your domain.
 
 - Local tools:
-  - [Terraform 1.14.x](https://developer.hashicorp.com/terraform/downloads)  
+  - Terraform is not needed locally — the Makefile runs it in Docker.  
   - [AWS CLI v2](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) (v2 required for SSO support)
   - [Docker](https://docs.docker.com/engine/install/) + docker-compose
   - `jq` (for securely handling JSON configuration)
@@ -282,7 +292,7 @@ aws ssm start-session --target <instance-id>
 The template includes modules and scripts for:
 
 - **CodeBuild**: Build and push Docker images to ECR (you add the buildspec).  
-- **CodeDeploy**: Deployment group for EC2 instance (tagged `role=n8n`), running `scripts/deploy.sh` to restart Docker Compose.  
+- **CodeDeploy**: Deployment group for EC2 instance (tagged `role=n8n`), running `scripts/deploy.sh` to restart Docker Compose. The instance runs the exact image CodeBuild pushed (`<ecr-repo>:<commit-sha7>`, passed via `build.env`), so `n8n_upstream_ref` in tfvars controls the production n8n version.  
 - **CodePipeline**: Source → Build → Deploy stages wired together (you configure repo, branches, and ECR).  
 
 You provide:
@@ -303,4 +313,4 @@ This template is intentionally opinionated to show strong defaults:
   - SSM/logs permissions are limited to what Session Manager and CloudWatch need.
 - **No inbound SSH**: Session Manager only.
 - **Automated patching**: SSM Patch Manager keeps OS patched.
-- **Modern Terraform**: 1.14.x and AWS provider 6.x pinned.
+- **Pinned Terraform**: the Makefile runs `hashicorp/terraform:$(TF_VERSION)` (currently 1.7) with AWS provider 6.x.
